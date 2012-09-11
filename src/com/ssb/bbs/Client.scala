@@ -44,7 +44,7 @@ class Client(socket:SocketChannel) extends Actor {
 		
 		val bb = ByteBuffer.wrap(Array(-1,-5,1,-1,-5,3));
 		telnetProtocol.put(bb);		
-		telnetProtocol.update();
+//		/telnetProtocol.update();
 		
 		put("LOGIN:");
 		val name = getLine();
