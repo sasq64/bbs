@@ -10,11 +10,11 @@ import java.io.PipedReader
 import java.io.PipedWriter
 import java.io.BufferedReader
 
-object TelnetProtocol extends Protocol {
+object TelnetProtocol {
 	val charset = Charset.forName("ISO-8859-1");
 }
 
-class TelnetProtocol(channel: SocketChannel) {
+class TelnetProtocol(channel: SocketChannel) extends Protocol {
 	
 val IAC:Byte = -1; //ff
 	val DONT:Byte = -2; //fe
@@ -58,7 +58,9 @@ val IAC:Byte = -1; //ff
 	
 	private val buffer = ByteBuffer.allocateDirect(1024);
 	private val outBuffer = ByteBuffer.allocateDirect(1024);
-	private val optionData = ByteBuffer.allocateDirect(128);	
+	private val optionData = ByteBuffer.allocateDirect(128);
+	private val ctempBuffer = CharBuffer.allocate(1024); 
+	
 	case class State(var state:Int, var byte:Byte = -1);
 	
 	private var state:State = new State(NORMAL, -1);
@@ -145,16 +147,30 @@ val IAC:Byte = -1; //ff
 		}
 		buffer.clear();
 	}
+	
+	override def read(bb: ByteBuffer) {
+		update();
+		bb.put(outBuffer);
+		outBuffer.clear();
+	}
 		
 	
-	def readByte() : Byte = {		
+	override def readByte() : Byte = {		
 		update();
 		return outBuffer.get();
 	}
+	
+	override def putByte(b: Byte) {
+		val bb = ByteBuffer.wrap(Array(b));
+		channel.write(bb);
+	}
 
-	def put(s:ByteBuffer) = {
+	override def put(s:ByteBuffer) = {
 		channel.write(s);
 		update();
 	}
+	
+	
+	
 
 }
