@@ -23,7 +23,31 @@ class Client(socket:SocketChannel) extends Actor {
 		
 		if(prompt != null)
 			put(prompt);
-		val line:String = telnetProtocol.readLine();
+		
+		//telnetProtocol.echo = true;
+		
+		val sb = new StringBuilder();
+		
+		var end = false;
+		while(!end) {
+			var c = telnetProtocol.readChar();
+
+			c match {
+				case 10 => end = true;
+
+				case 0x7f => if(sb.length > 0) {
+					sb.deleteCharAt(sb.length-1); c = 8	
+				} else c = 0;
+
+				case _ => sb.append(c);
+			}
+			if(c > 0)
+				telnetProtocol.putChar(c.asInstanceOf[Char]);
+		}
+		
+		//telnetProtocol.echo = false;
+		
+		val line:String = sb.toString();
 		/*if(line == null) {
 			println("EOF!");
 			if(currentUser != null)
@@ -31,6 +55,9 @@ class Client(socket:SocketChannel) extends Actor {
 			socketDead = true;
 			exit();
 		} */
+		
+		
+		
 		return line;
 	}
 	
@@ -41,10 +68,19 @@ class Client(socket:SocketChannel) extends Actor {
 	def act() = {
 		
 		telnetProtocol = new TelnetProtocol(socket);
+				
 		
-		val bb = ByteBuffer.wrap(Array(-1,-5,1,-1,-5,3));
-		telnetProtocol.put(bb);		
-//		/telnetProtocol.update();
+		//telnetProtocol.readTerminalType();
+		telnetProtocol.echo(false);
+		telnetProtocol.supressGoAhead(false);
+		
+		//telnetProtocol.update();
+		
+		telnetProtocol.readWindowSize((a:Int, b:Int) => println("%d %d".format(a, b)));
+		
+		telnetProtocol.put(ByteBuffer.wrap(Array(0x1b, '[', '2', 'J')));
+		
+		telnetProtocol.put(ByteBuffer.wrap(Array(0x1b, '[', '2', ';', '2', 'H')));
 		
 		put("LOGIN:");
 		val name = getLine();
@@ -59,11 +95,12 @@ class Client(socket:SocketChannel) extends Actor {
 			put("Login successful: " + user.name + "!\n");
 			currentUser = user;
 		} else {
-			put("Login failed");
+			put("Login failed\n");
 		}
 		
 		while(true) {
 			val command = getLine("-->");
+			println(command);
 		}
 	}
 }
