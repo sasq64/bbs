@@ -36,11 +36,18 @@ val IAC:Byte = -1; //ff
 	val LF:Byte = 10;
 	val CR:Byte = 13;
 	
-	val NORMAL = 0;
+	object Mode extends Enumeration {
+		type Mode = Value;
+		val NORMAL, FOUND_IAC, SUB_OPTION, FOUND_IAC_SUB, CR_READ, OPTION = Value;
+	}
+	import Mode._
+	
+	/* val NORMAL = 0;
 	val FOUND_IAC = 1;
 	val SUB_OPTION = 2;
 	val FOUND_IAC_SUB = 3;
 	val CR_READ = 4;
+	val OPTION = 5; */
 	
 	val TRANSMIT_BINARY:Byte = 0;
 	val ECHO:Byte = 1;
@@ -61,7 +68,7 @@ val IAC:Byte = -1; //ff
 	private val optionData = ByteBuffer.allocateDirect(128);
 	private val ctempBuffer = CharBuffer.allocate(1024); 
 	
-	case class State(var state:Int, var byte:Byte = -1);
+	case class State(var mode:Mode, var byte:Byte = -1);
 	
 	private var state:State = new State(NORMAL, -1);
 	
@@ -130,14 +137,14 @@ val IAC:Byte = -1; //ff
 			//val b = buffer.get();
 			println("%02x\n".format(state.byte));
 			
-			state.state = state match {
+			state.mode = state match {
 				case State(SUB_OPTION, IAC) => FOUND_IAC_SUB
 				case State(SUB_OPTION, b) => optionData.put(b); SUB_OPTION
 				case State(FOUND_IAC_SUB, SE) => handleOptionData(); NORMAL
 				case State(FOUND_IAC_SUB, b) => optionData.put(IAC); optionData.put(b); SUB_OPTION
-				case State(SB, b) => setOption(SB, b);  SUB_OPTION
-				case State(s, b) if s < 0 => setOption(s, b);  NORMAL
-				case State(FOUND_IAC, b) if(b < 0 && b >= SE) => b
+				case State(OPTION, b) if(option == SB) => setOption(SB, b);  SUB_OPTION
+				case State(OPTION, b) => setOption(option, b);  NORMAL
+				case State(FOUND_IAC, b) if(b < 0 && b >= SE) => option = b; OPTION
 				case State(FOUND_IAC, b) => outBuffer.put(IAC); outBuffer.put(b); NORMAL
 				case State(NORMAL, IAC) => FOUND_IAC
 				case State(CR_READ, 0) => outBuffer.put(LF) ; NORMAL
@@ -147,7 +154,7 @@ val IAC:Byte = -1; //ff
 				case State(NORMAL, b) => outBuffer.put(b); NORMAL
 			}
 			
-			println("BYTE: %d => STATE: %d".format(state.byte,state.state));
+			println("BYTE: %d => STATE: %s".format(state.byte, state.mode.toString()));
 			
 		}
 		buffer.clear();
@@ -178,12 +185,5 @@ val IAC:Byte = -1; //ff
 			channel.write(bb);
 		}
 	}
-
-	/*override def put(s:ByteBuffer) = {
-		channel.write(s);
-	}*/
-	
-	
-	
 
 }
