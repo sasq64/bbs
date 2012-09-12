@@ -135,10 +135,15 @@ val IAC:Byte = -1; //ff
 				case State(SUB_OPTION, b) => optionData.put(b); SUB_OPTION
 				case State(FOUND_IAC_SUB, SE) => handleOptionData(); NORMAL
 				case State(FOUND_IAC_SUB, b) => optionData.put(IAC); optionData.put(b); SUB_OPTION
+				case State(SB, b) => setOption(SB, b);  SUB_OPTION
 				case State(s, b) if s < 0 => setOption(s, b);  NORMAL
 				case State(FOUND_IAC, b) if(b < 0 && b >= SE) => b
 				case State(FOUND_IAC, b) => outBuffer.put(IAC); outBuffer.put(b); NORMAL
 				case State(NORMAL, IAC) => FOUND_IAC
+				case State(CR_READ, 0) => outBuffer.put(LF) ; NORMAL
+				case State(CR_READ, 10) => outBuffer.put(LF) ; NORMAL
+				case State(CR_READ, b) => outBuffer.put(CR) ; NORMAL
+				case State(NORMAL, CR) => CR_READ
 				case State(NORMAL, b) => outBuffer.put(b); NORMAL
 			}
 			
@@ -150,25 +155,33 @@ val IAC:Byte = -1; //ff
 	
 	override def read(bb: ByteBuffer) {
 		update();
+		outBuffer.flip();
 		bb.put(outBuffer);
-		outBuffer.clear();
+		outBuffer.compact();
 	}
 		
 	
 	override def readByte() : Byte = {		
 		update();
-		return outBuffer.get();
+		outBuffer.flip();
+		val b = outBuffer.get();
+		outBuffer.compact();
+		return b;
 	}
 	
 	override def putByte(b: Byte) {
-		val bb = ByteBuffer.wrap(Array(b));
-		channel.write(bb);
+		if(b == LF) {
+			val bb = ByteBuffer.wrap(Array(CR, LF));
+			channel.write(bb);			
+		} else {
+			val bb = ByteBuffer.wrap(Array(b));
+			channel.write(bb);
+		}
 	}
 
-	override def put(s:ByteBuffer) = {
+	/*override def put(s:ByteBuffer) = {
 		channel.write(s);
-		update();
-	}
+	}*/
 	
 	
 	

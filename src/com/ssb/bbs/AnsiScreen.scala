@@ -15,31 +15,39 @@ class AnsiScreen(protocol: Protocol) {
 	private val decoder = AnsiScreen.charset.newDecoder();
 	private val encoder = AnsiScreen.charset.newEncoder();
 	
-	private val ctempBuffer = CharBuffer.allocate(1024);
+	private val charBuffer = CharBuffer.allocate(1024);
 	private val outBuffer = ByteBuffer.allocate(1024);
-	private val inBuffer = ByteBuffer.allocate(1024);
-	
+	private val tempBuffer = ByteBuffer.allocate(1024);
+		
 	def putChar(c: Char) {
-		ctempBuffer.clear();
-		ctempBuffer.put(c);
-		encoder.encode(ctempBuffer, outBuffer, false);
-		protocol.put(outBuffer);
+		val bb = AnsiScreen.charset.encode(c.toString);
+		protocol.put(bb);
+	}
+	
+	def update() {
+		protocol.read(tempBuffer);
+		println(charBuffer.position, charBuffer.limit);
+		if(tempBuffer.position() > 0) {
+			tempBuffer.flip();			
+			decoder.decode(tempBuffer, charBuffer, false);
+			tempBuffer.clear();
+		}
+		
 	}
 	
 	def getChar(): Char = {
-		ctempBuffer.clear();
-		while(ctempBuffer.position() == 0) {
-			protocol.read(inBuffer);
-			decoder.decode(inBuffer, ctempBuffer, false);
-		}
-		return ctempBuffer.get();
+		while(charBuffer.position() == 0)
+			update();
+		charBuffer.flip();
+		val c = charBuffer.get();
+		charBuffer.compact();
+		return c;
 	}
 	
 	def put(s: String) {
-		ctempBuffer.clear();
-		ctempBuffer.put(s);
-		encoder.encode(ctempBuffer, outBuffer, false);
-		protocol.put(outBuffer);		
+		
+		val bb = AnsiScreen.charset.encode(s);
+		protocol.put(bb);
 	}
 	
 	def getLine(prompt:String = null) : String = {
@@ -53,7 +61,7 @@ class AnsiScreen(protocol: Protocol) {
 		
 		var end = false;
 		while(!end) {
-			var c = readChar();
+			var c = getChar();
 
 			c match {
 				case 10 => end = true;
@@ -69,8 +77,6 @@ class AnsiScreen(protocol: Protocol) {
 		}
 
 		val line:String = sb.toString();
-
-		
 		return line;
 	}
 
