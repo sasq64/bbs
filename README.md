@@ -1,4 +1,4 @@
 bbs
 ===
 
-Textmode/telnet bbs in scala
+Textmode/telnet bbs supporting Ansi and Petscii
