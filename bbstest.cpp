@@ -25,7 +25,17 @@ int main(int argc, char **argv) {
 int main(int argc, char **argv) {
 
 	setvbuf(stdout, NULL, _IONBF, 0);
+
 	logging::setLevel(logging::DEBUG);
+/*
+	{
+		logging::setLevel(logging::OFF);
+		unique_ptr<Console> console { createLocalConsole() };
+		console->write("Hello:");
+		auto text = console->getLine();
+		console->write("\nHello '" + text + "'\n");
+		logging::setLevel(logging::DEBUG);
+	}*/
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
@@ -40,12 +50,19 @@ int main(int argc, char **argv) {
 			console = unique_ptr<Console>(new PetsciiConsole { session });
 		}
 		console->flush();
-
-		console->write("Welcome user.\nNAME:");
-		auto line = console->getLine();
-		console->write("DONE\n");
-		if(line == "sasq") {
-			console->write("Welcome!\n");
+		while(true) {
+			console->write("\nNAME:");
+			auto line = console->getLine();
+			if(line == "sasq") {
+				console->write("Welcome!\n");
+				break;
+			}
+		}
+		while(true) {
+			console->write("\n>> ");
+			auto line = console->getLine();
+			if(line == "quit")
+				break;
 		}
 
 	});
