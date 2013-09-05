@@ -1,7 +1,7 @@
 
 #include <coreutils/log.h>
-#include <bbsutils/TelnetServer.h>
-#include <bbsutils/Console.h>
+#include <bbsutils/telnetserver.h>
+#include <bbsutils/console.h>
 
 #include <string>
 
@@ -42,8 +42,11 @@ int main(int argc, char **argv) {
 		console->flush();
 
 		console->write("Welcome user.\nNAME:");
-		int key = console->getKey();
+		auto line = console->getLine();
 		console->write("DONE\n");
+		if(line == "sasq") {
+			console->write("Welcome!\n");
+		}
 
 	});
 	telnet.run();
