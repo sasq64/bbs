@@ -50,19 +50,35 @@ int main(int argc, char **argv) {
 			console = unique_ptr<Console>(new PetsciiConsole { session });
 		}
 		console->flush();
+		string userName;
+		console->write("\nNAME:");
+		userName = console->getLine();
+		session.postOthers(userName + " joined");
+		console->clear();
+		auto h = console->getHeight();
+		int ypos = 0;
+		console->moveCursor(0,h-1);
+		auto line = console->getLineAsync();
+		
 		while(true) {
-			console->write("\nNAME:");
-			auto line = console->getLine();
-			if(line == "sasq") {
-				console->write("Welcome!\n");
-				break;
+			//console->write("\n>> ");
+			if(line.wait_for(chrono::milliseconds(250)) == future_status::ready) {
+				session.postOthers(userName + ": " + line.get());
+				console->put(0, h-1, "                                     ");
+				console->moveCursor(0,h-1);
+				line = console->getLineAsync();
 			}
-		}
-		while(true) {
-			console->write("\n>> ");
-			auto line = console->getLine();
-			if(line == "quit")
-				break;
+			while(session.hasMessages()) {
+				auto msg = session.getMessage();
+				console->put(0, ypos, msg + "\n");
+				ypos++;
+				if(ypos > h-4) {
+					console->scroll(0,1);
+					ypos--;
+				}
+
+			}
+			console->flush();
 		}
 
 	});
