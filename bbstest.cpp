@@ -37,6 +37,9 @@ int main(int argc, char **argv) {
 		logging::setLevel(logging::DEBUG);
 	}*/
 
+	vector<string> chatLines;
+	mutex chatLock;
+
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
 		session.echo(false);
@@ -50,35 +53,52 @@ int main(int argc, char **argv) {
 			console = unique_ptr<Console>(new PetsciiConsole { session });
 		}
 		console->flush();
+		auto h = console->getHeight();
+		auto w = console->getWidth();
+
 		string userName;
 		console->write("\nNAME:");
 		userName = console->getLine();
-		session.postOthers(userName + " joined");
+		chatLines.push_back(userName + " joined");
+
 		console->clear();
-		auto h = console->getHeight();
 		int ypos = 0;
-		console->moveCursor(0,h-1);
+		console->put(0, h-2, string(w,'-'));
+		int lastLine = 0;
+
+		console->moveCursor(0, h-1);
 		auto line = console->getLineAsync();
-		
+
+		{ lock_guard<mutex> guard(chatLock);
+			if((int)chatLines.size() > h)
+				lastLine = chatLines.size() - h;
+		}
 		while(true) {
-			//console->write("\n>> ");
 			if(line.wait_for(chrono::milliseconds(250)) == future_status::ready) {
-				session.postOthers(userName + ": " + line.get());
-				console->put(0, h-1, "                                     ");
+				{ lock_guard<mutex> guard(chatLock);
+					chatLines.push_back(userName + ": " + line.get());
+				}
+				console->put(0, h-1, string(w,' '));
 				console->moveCursor(0,h-1);
 				line = console->getLineAsync();
 			}
-			while(session.hasMessages()) {
-				auto msg = session.getMessage();
-				console->put(0, ypos, msg + "\n");
-				ypos++;
-				if(ypos > h-4) {
-					console->scroll(0,1);
-					ypos--;
-				}
 
+			{ lock_guard<mutex> guard(chatLock);
+				while((int)chatLines.size() > lastLine) {
+					auto msg = chatLines[lastLine++];
+					ypos++;
+					if(ypos > h-2) {
+						console->scroll(0,1);
+						console->put(0, h-3, string(w,' '));
+						console->put(0, h-2,string(w,'-'));
+						ypos--;
+					}
+					console->put(0, ypos-1, msg);
+
+				}
+				console->flush();
 			}
-			console->flush();
+
 		}
 
 	});
