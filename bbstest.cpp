@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 					auto msg = chatLines[lastLine++];
 					ypos++;
 					if(ypos > h-2) {
-						console->scroll(0,1);
+						console->scrollScreen(1);
 						console->put(0, h-3, string(w,' '));
 						console->put(0, h-2,string(w,'-'));
 						ypos--;
