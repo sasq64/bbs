@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
 		session.echo(false);
-		string termType = session.getTermType();		
+		auto termType = session.getTermType();		
 		LOGD("New connection, TERMTYPE '%s'", termType);
 
 		unique_ptr<Console> console;
@@ -52,21 +52,20 @@ int main(int argc, char **argv) {
 		} else {
 			console = unique_ptr<Console>(new PetsciiConsole { session });
 		}
-		console->flush();
+		//console->flush();
 		auto h = console->getHeight();
 		auto w = console->getWidth();
 
-		string userName;
 		console->write("\nNAME:");
-		userName = console->getLine();
+		auto userName = console->getLine();
 		chatLines.push_back(userName + " joined");
 
-		console->clear();
-		int ypos = 0;
-		console->put(0, h-2, string(w,'-'));
 		int lastLine = 0;
-
+		int ypos = 0;
+		console->clear();
+		console->put(0, h-2, string(w,'-'));
 		console->moveCursor(0, h-1);
+		
 		auto line = console->getLineAsync();
 
 		{ lock_guard<mutex> guard(chatLock);
@@ -90,7 +89,7 @@ int main(int argc, char **argv) {
 					if(ypos > h-2) {
 						console->scrollScreen(1);
 						console->put(0, h-3, string(w,' '));
-						console->put(0, h-2,string(w,'-'));
+						console->put(0, h-2, string(w,'-'));
 						ypos--;
 					}
 					console->put(0, ypos-1, msg);
