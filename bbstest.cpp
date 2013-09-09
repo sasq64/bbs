@@ -2,6 +2,7 @@
 #include <coreutils/log.h>
 #include <bbsutils/telnetserver.h>
 #include <bbsutils/console.h>
+#include <bbsutils/editor.h>
 
 #include <string>
 
@@ -66,24 +67,29 @@ int main(int argc, char **argv) {
 		console->put(0, h-2, string(w,'-'), Console::CURRENT_COLOR, Console::BLUE);
 		console->moveCursor(0, h-1);
 		
-		auto line = console->getLineAsync();
+		//auto line = console->getLineAsync();
+		auto le =  unique_ptr<LineEditor>(new LineEditor(*console));
 
 		{ lock_guard<mutex> guard(chatLock);
 			if((int)chatLines.size() > h)
 				lastLine = chatLines.size() - h;
 		}
 		while(true) {
-			if(line.wait_for(chrono::milliseconds(250)) == future_status::ready) {
+
+			if(le->update(500) == 0) {
+				auto line = le->getResult();
 				{ lock_guard<mutex> guard(chatLock);
-					chatLines.push_back(userName + ": " + line.get());
+					chatLines.push_back(userName + ": " + line);
 				}
 				console->put(0, h-1, string(w,' '), Console::CURRENT_COLOR, Console::BLACK);
 				console->moveCursor(0,h-1);
-				line = console->getLineAsync();
+				le = unique_ptr<LineEditor>(new LineEditor(*console));
 			}
 
 			{ lock_guard<mutex> guard(chatLock);
+				bool newLines = false;
 				while((int)chatLines.size() > lastLine) {
+					newLines = true;
 					auto msg = chatLines[lastLine++];
 					ypos++;
 					if(ypos > h-2) {
@@ -95,6 +101,9 @@ int main(int argc, char **argv) {
 					console->put(0, ypos-1, msg);
 
 				}
+				if(newLines)
+					le->refresh();
+
 				console->flush();
 			}
 
