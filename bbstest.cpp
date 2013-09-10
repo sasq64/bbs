@@ -1,5 +1,6 @@
 
 #include <coreutils/log.h>
+#include <coreutils/utils.h>
 #include <bbsutils/telnetserver.h>
 #include <bbsutils/console.h>
 #include <bbsutils/editor.h>
@@ -8,6 +9,7 @@
 
 using namespace std;
 using namespace bbs;
+using namespace utils;
 
 #if 0
 int main(int argc, char **argv) {
@@ -48,14 +50,18 @@ int main(int argc, char **argv) {
 
 		unique_ptr<Console> console;
 		if(termType.length() > 0) {
-			console = unique_ptr<Console>(new AnsiConsole { session });
+			console = make_unique<AnsiConsole>(session);
 		} else {
-			console = unique_ptr<Console>(new PetsciiConsole { session });
+			console = make_unique<PetsciiConsole>(session);
 		}
 		console->flush();
 		auto h = console->getHeight();
 		auto w = console->getWidth();
 		LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
+
+		File file { "bbstest.cpp" };
+		string contents((char*)file.getPtr(), file.getSize());
+		console->write(contents);
 
 		console->write("\nNAME:");
 		auto userName = console->getLine();
@@ -68,7 +74,8 @@ int main(int argc, char **argv) {
 		console->moveCursor(0, h-1);
 		
 		//auto line = console->getLineAsync();
-		auto le =  unique_ptr<LineEditor>(new LineEditor(*console));
+		//auto le =  unique_ptr<LineEditor>(new LineEditor(*console));
+		auto lineEd = make_unique<LineEditor>(*console);
 
 		{ lock_guard<mutex> guard(chatLock);
 			if((int)chatLines.size() > h)
@@ -76,14 +83,14 @@ int main(int argc, char **argv) {
 		}
 		while(true) {
 
-			if(le->update(500) == 0) {
-				auto line = le->getResult();
+			if(lineEd->update(500) == 0) {
+				auto line = lineEd->getResult();
 				{ lock_guard<mutex> guard(chatLock);
 					chatLines.push_back(userName + ": " + line);
 				}
 				console->put(0, h-1, string(w,' '), Console::CURRENT_COLOR, Console::BLACK);
 				console->moveCursor(0,h-1);
-				le = unique_ptr<LineEditor>(new LineEditor(*console));
+				lineEd = make_unique<LineEditor>(*console);
 			}
 
 			{ lock_guard<mutex> guard(chatLock);
@@ -102,7 +109,7 @@ int main(int argc, char **argv) {
 
 				}
 				if(newLines)
-					le->refresh();
+					lineEd->refresh();
 
 				console->flush();
 			}
