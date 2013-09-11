@@ -11,34 +11,46 @@ using namespace std;
 using namespace bbs;
 using namespace utils;
 
-#if 0
-int main(int argc, char **argv) {
+int menu(Console &console, const vector<pair<char, string>> &entries) {
 
-	TelnetServer telnet { 12345 };
-	telnet.setOnConnect([&](TelnetServer::Session &session) {
-		session.write("hello world\r\n");
-		telnet.quit();
-	});
-	telnet.run();
+	auto contents = console.getTiles();
 
-	return 0;
+	auto w = console.getWidth();
+	auto h = console.getHeight();
+	unsigned int maxl = 0;
+
+	for(const auto &e : entries) {
+		auto l = e.second.length();
+		if(l > maxl)
+			maxl = l;
+	}
+
+	auto menuw = maxl + 7;
+	auto menuh = entries.size() + 2;
+	auto menux = (w - menuw)/2;
+	auto menuy = (h - menuh)/2;
+
+	console.fill(Console::LIGHT_GREY, menux, menuy, menuw, menuh);
+	auto y = menuy+1;
+	for(const auto &e : entries) {
+		console.put(menux+1, y++, format("[%c] %s", e.first, e.second));
+	}
+	console.flush();
+
+	auto k = console.getKey();
+
+
+	console.setTiles(contents);
+
+	return k;
+
 }
-#endif
 
 int main(int argc, char **argv) {
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 
 	logging::setLevel(logging::DEBUG);
-/*
-	{
-		logging::setLevel(logging::OFF);
-		unique_ptr<Console> console { createLocalConsole() };
-		console->write("Hello:");
-		auto text = console->getLine();
-		console->write("\nHello '" + text + "'\n");
-		logging::setLevel(logging::DEBUG);
-	}*/
 
 	vector<string> chatLines;
 	mutex chatLock;
@@ -48,34 +60,37 @@ int main(int argc, char **argv) {
 		session.echo(false);
 		auto termType = session.getTermType();		
 
-		unique_ptr<Console> console;
+		unique_ptr<Console> con;
 		if(termType.length() > 0) {
-			console = make_unique<AnsiConsole>(session);
+			con = make_unique<AnsiConsole>(session);
 		} else {
-			console = make_unique<PetsciiConsole>(session);
+			con = make_unique<PetsciiConsole>(session);
 		}
-		console->flush();
-		auto h = console->getHeight();
-		auto w = console->getWidth();
+		Console &console = *con;
+
+		console.flush();
+		auto h = console.getHeight();
+		auto w = console.getWidth();
 		LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
 
-		File file { "bbstest.cpp" };
-		string contents((char*)file.getPtr(), file.getSize());
-		console->write(contents);
+		menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
 
-		console->write("\nNAME:");
-		auto userName = console->getLine();
+		//File file { "bbstest.cpp" };
+		//string contents((char*)file.getPtr(), file.getSize());
+		//console.write(contents);
+
+		console.write("\nNAME:");
+		auto userName = console.getLine();
 		chatLines.push_back(userName + " joined");
 
-		int lastLine = 0;
-		int ypos = 0;
-		console->clear();
-		console->put(0, h-2, string(w,'-'), Console::CURRENT_COLOR, Console::BLUE);
-		console->moveCursor(0, h-1);
+		auto lastLine = 0;
+		auto ypos = 0;
+		console.clear();
+		console.fill(Console::BLUE, 0, -2, 0, 1);
+		console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
+		console.moveCursor(0, -1);
 		
-		//auto line = console->getLineAsync();
-		//auto le =  unique_ptr<LineEditor>(new LineEditor(*console));
-		auto lineEd = make_unique<LineEditor>(*console);
+		auto lineEd = make_unique<LineEditor>(console);
 
 		{ lock_guard<mutex> guard(chatLock);
 			if((int)chatLines.size() > h)
@@ -83,39 +98,45 @@ int main(int argc, char **argv) {
 		}
 		while(true) {
 
-			if(lineEd->update(500) == 0) {
-				auto line = lineEd->getResult();
+			auto key = lineEd->update(500);
+			if(key >= 0)
+				LOGD("Key %d", key);
+			switch(key) {
+			case 0:
 				{ lock_guard<mutex> guard(chatLock);
+					auto line = lineEd->getResult();
 					chatLines.push_back(userName + ": " + line);
 				}
-				console->put(0, h-1, string(w,' '), Console::CURRENT_COLOR, Console::BLACK);
-				console->moveCursor(0,h-1);
-				lineEd = make_unique<LineEditor>(*console);
+				console.fill(Console::BLACK, 0, -1, 0, 1);
+				console.moveCursor(0,h-1);
+				lineEd = make_unique<LineEditor>(console);
+				break;
+			case Console::KEY_F7:
+				menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+				break;
 			}
 
 			{ lock_guard<mutex> guard(chatLock);
-				bool newLines = false;
+				auto newLines = false;
 				while((int)chatLines.size() > lastLine) {
 					newLines = true;
 					auto msg = chatLines[lastLine++];
 					ypos++;
 					if(ypos > h-2) {
-						console->scrollScreen(1);
-						console->put(0, h-3, string(w,' '), Console::CURRENT_COLOR, Console::BLACK);
-						console->put(0, h-2, string(w,'-'), Console::CURRENT_COLOR, Console::BLUE);
+						console.scrollScreen(1);
+						console.fill(Console::BLACK, 0, -3, 0, 1);
+						console.fill(Console::BLUE, 0, -2, 0, 1);
 						ypos--;
 					}
-					console->put(0, ypos-1, msg);
+					console.put(0, ypos-1, msg);
 
 				}
 				if(newLines)
 					lineEd->refresh();
 
-				console->flush();
+				console.flush();
 			}
-
 		}
-
 	});
 	telnet.run();
 
