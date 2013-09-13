@@ -17,7 +17,7 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 
 	auto w = console.getWidth();
 	auto h = console.getHeight();
-	unsigned int maxl = 0;
+	size_t maxl = 0;
 
 	for(const auto &e : entries) {
 		auto l = e.second.length();
@@ -39,11 +39,46 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 
 	auto k = console.getKey();
 
-
 	console.setTiles(contents);
 
 	return k;
 
+}
+
+void shell(Console &console) {
+
+	console.write("System shell. Use 'exit' to quit\n\n");
+
+	string rootDir = "/home/sasq/projects/bbs";
+	File currentDir { rootDir };
+
+	while(true) {
+
+		console.write(currentDir.getName() + " # ");
+		auto line = console.getLine();
+		console.write("\n");
+
+		auto parts = split(line);
+		if(parts.size() < 1)
+			continue;
+		auto cmd = parts[0];
+
+
+		if(cmd == "ls") {
+			for(const auto &f : currentDir.listFiles()) {
+				console.write(format("%-32s %d\n", path_filename(f.getName()), f.getSize()));
+			}
+		} else if(cmd == "cd") {
+			File newDir { currentDir, parts[1] };
+			if(newDir.exists())
+				currentDir = newDir;
+		} else if(cmd == "cat") {
+			File file { currentDir, parts[1] };
+			string contents((char*)file.getPtr(), file.getSize());
+			console.write(contents);
+		} else if(cmd == "exit")
+			return;
+	}
 }
 
 int main(int argc, char **argv) {
@@ -73,8 +108,14 @@ int main(int argc, char **argv) {
 		auto w = console.getWidth();
 		LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
 
-		menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
-
+		while(true) {
+			int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
+			LOGD("WHAT %d", what);
+			//if(what == 1)
+				shell(console);
+			//else
+			//	break;
+		}
 		//File file { "bbstest.cpp" };
 		//string contents((char*)file.getPtr(), file.getSize());
 		//console.write(contents);
@@ -108,7 +149,7 @@ int main(int argc, char **argv) {
 					chatLines.push_back(userName + ": " + line);
 				}
 				console.fill(Console::BLACK, 0, -1, 0, 1);
-				console.moveCursor(0,h-1);
+				console.moveCursor(0, h-1);
 				lineEd = make_unique<LineEditor>(console);
 				break;
 			case Console::KEY_F7:
