@@ -19,6 +19,7 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 	auto h = console.getHeight();
 	size_t maxl = 0;
 
+
 	for(const auto &e : entries) {
 		auto l = e.second.length();
 		if(l > maxl)
@@ -45,6 +46,16 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 
 }
 
+string makeSize(int bytes) {
+	auto suffix = vector<string>{ "B", "K", "M", "G", "T" };
+	auto s = 0;
+	while(bytes > 1024) {
+		bytes /= 1024;
+		s++;
+	}
+	return format("%d%s", bytes, s);
+}
+
 void shell(Console &console) {
 
 	console.write("System shell. Use 'exit' to quit\n\n");
@@ -66,7 +77,7 @@ void shell(Console &console) {
 
 		if(cmd == "ls") {
 			for(const auto &f : currentDir.listFiles()) {
-				console.write(format("%-32s %d\n", path_filename(f.getName()), f.getSize()));
+				console.write(format("%-32s %s\n", path_filename(f.getName()), makeSize(f.getSize())));
 			}
 		} else if(cmd == "cd") {
 			File newDir { currentDir, parts[1] };
@@ -116,9 +127,6 @@ int main(int argc, char **argv) {
 			//else
 			//	break;
 		}
-		//File file { "bbstest.cpp" };
-		//string contents((char*)file.getPtr(), file.getSize());
-		//console.write(contents);
 
 		console.write("\nNAME:");
 		auto userName = console.getLine();
@@ -149,7 +157,7 @@ int main(int argc, char **argv) {
 					chatLines.push_back(userName + ": " + line);
 				}
 				console.fill(Console::BLACK, 0, -1, 0, 1);
-				console.moveCursor(0, h-1);
+				console.moveCursor(0, -1);
 				lineEd = make_unique<LineEditor>(console);
 				break;
 			case Console::KEY_F7:
