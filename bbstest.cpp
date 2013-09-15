@@ -6,6 +6,7 @@
 #include <bbsutils/editor.h>
 
 #include <string>
+#include <algorithm>
 
 using namespace std;
 using namespace bbs;
@@ -17,15 +18,14 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 
 	auto w = console.getWidth();
 	auto h = console.getHeight();
-	size_t maxl = 0;
 
+	// Find max string length
+	auto maxit = max_element(entries.begin(), entries.end(), [](const pair<char, string> &e0, const pair<char, string> &e1) {
+		return e0.second.length() < e1.second.length();
+	});
+	auto maxl = maxit->second.length();
 
-	for(const auto &e : entries) {
-		auto l = e.second.length();
-		if(l > maxl)
-			maxl = l;
-	}
-
+	// Bounds of menu rectangle
 	auto menuw = maxl + 7;
 	auto menuh = entries.size() + 2;
 	auto menux = (w - menuw)/2;
@@ -38,11 +38,19 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 	}
 	console.flush();
 
-	auto k = console.getKey();
+	while(true) {
+		auto k = console.getKey();
 
-	console.setTiles(contents);
-
-	return k;
+		// Check that the key is among the ones given
+		auto it = find_if(entries.begin(), entries.end(), [&](const pair<char, string> &e) {
+			return (k == e.first);
+		});
+		if(it != entries.end()) {
+			console.setTiles(contents);
+			return it - entries.begin();
+		}
+	}
+	//return k;
 
 }
 
@@ -53,7 +61,7 @@ string makeSize(int bytes) {
 		bytes /= 1024;
 		s++;
 	}
-	return format("%d%s", bytes, s);
+	return format("%d%s", bytes, suffix[s]);
 }
 
 void shell(Console &console) {
@@ -103,88 +111,97 @@ int main(int argc, char **argv) {
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
-		session.echo(false);
-		auto termType = session.getTermType();		
+		try {
+			session.echo(false);
+			auto termType = session.getTermType();		
 
-		unique_ptr<Console> con;
-		if(termType.length() > 0) {
-			con = make_unique<AnsiConsole>(session);
-		} else {
-			con = make_unique<PetsciiConsole>(session);
-		}
-		Console &console = *con;
-
-		console.flush();
-		auto h = console.getHeight();
-		auto w = console.getWidth();
-		LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
-
-		while(true) {
-			int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
-			LOGD("WHAT %d", what);
-			//if(what == 1)
-				shell(console);
-			//else
-			//	break;
-		}
-
-		console.write("\nNAME:");
-		auto userName = console.getLine();
-		chatLines.push_back(userName + " joined");
-
-		auto lastLine = 0;
-		auto ypos = 0;
-		console.clear();
-		console.fill(Console::BLUE, 0, -2, 0, 1);
-		console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
-		console.moveCursor(0, -1);
-		
-		auto lineEd = make_unique<LineEditor>(console);
-
-		{ lock_guard<mutex> guard(chatLock);
-			if((int)chatLines.size() > h)
-				lastLine = chatLines.size() - h;
-		}
-		while(true) {
-
-			auto key = lineEd->update(500);
-			if(key >= 0)
-				LOGD("Key %d", key);
-			switch(key) {
-			case 0:
-				{ lock_guard<mutex> guard(chatLock);
-					auto line = lineEd->getResult();
-					chatLines.push_back(userName + ": " + line);
-				}
-				console.fill(Console::BLACK, 0, -1, 0, 1);
-				console.moveCursor(0, -1);
-				lineEd = make_unique<LineEditor>(console);
-				break;
-			case Console::KEY_F7:
-				menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
-				break;
+			unique_ptr<Console> con;
+			if(termType.length() > 0) {
+				con = make_unique<AnsiConsole>(session);
+			} else {
+				con = make_unique<PetsciiConsole>(session);
 			}
+			Console &console = *con;
+
+			console.flush();
+			auto h = console.getHeight();
+			auto w = console.getWidth();
+			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
+
+			while(true) {
+				int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
+				LOGD("WHAT %d", what);
+				if(what == 2) {
+					//session.disconnect();
+					session.close();
+					return;
+				} else
+				if(what == 1)
+					shell(console);
+				else
+					break;
+			}
+
+			console.write("\nNAME:");
+			auto userName = console.getLine();
+			chatLines.push_back(userName + " joined");
+
+			uint lastLine = 0;
+			auto ypos = 0;
+			console.clear();
+			console.fill(Console::BLUE, 0, -2, 0, 1);
+			console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
+			console.moveCursor(0, -1);
+			
+			auto lineEd = make_unique<LineEditor>(console);
 
 			{ lock_guard<mutex> guard(chatLock);
-				auto newLines = false;
-				while((int)chatLines.size() > lastLine) {
-					newLines = true;
-					auto msg = chatLines[lastLine++];
-					ypos++;
-					if(ypos > h-2) {
-						console.scrollScreen(1);
-						console.fill(Console::BLACK, 0, -3, 0, 1);
-						console.fill(Console::BLUE, 0, -2, 0, 1);
-						ypos--;
-					}
-					console.put(0, ypos-1, msg);
-
-				}
-				if(newLines)
-					lineEd->refresh();
-
-				console.flush();
+				if((int)chatLines.size() > h)
+					lastLine = chatLines.size() - h;
 			}
+			while(true) {
+
+				auto key = lineEd->update(500);
+				if(key >= 0)
+					LOGD("Key %d", key);
+				switch(key) {
+				case 0:
+					{ lock_guard<mutex> guard(chatLock);
+						auto line = lineEd->getResult();
+						chatLines.push_back(userName + ": " + line);
+					}
+					console.fill(Console::BLACK, 0, -1, 0, 1);
+					console.moveCursor(0, -1);
+					lineEd = make_unique<LineEditor>(console);
+					break;
+				case Console::KEY_F7:
+					menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+					break;
+				}
+
+				{ lock_guard<mutex> guard(chatLock);
+					auto newLines = false;
+					while(chatLines.size() > lastLine) {
+						newLines = true;
+						auto msg = chatLines[lastLine++];
+						ypos++;
+						if(ypos > h-2) {
+							console.scrollScreen(1);
+							console.fill(Console::BLACK, 0, -3, 0, 1);
+							console.fill(Console::BLUE, 0, -2, 0, 1);
+							ypos--;
+						}
+						console.put(0, ypos-1, msg);
+
+					}
+					if(newLines)
+						lineEd->refresh();
+
+					console.flush();
+				}
+			}
+		} catch (TelnetServer::disconnect_excpetion e) {
+			LOGD("Client disconnected");
 		}
 	});
 	telnet.run();
