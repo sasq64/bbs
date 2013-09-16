@@ -73,12 +73,17 @@ void shell(Console &console) {
 
 	console.write("System shell. Use 'exit' to quit\n\n");
 
-	string rootDir = "/home/sasq/projects/bbs";
-	File currentDir { rootDir };
+	File rootDir = { "/home/sasq/projects/bbs" };
+	auto rootName = rootDir.getName();
+	auto rootLen = rootName.length();
+	File currentDir = rootDir;
 
 	while(true) {
 
-		console.write(currentDir.getName() + " # ");
+		auto d = currentDir.getName().substr(rootLen);
+		if(d == "") d = "/";
+
+		console.write(d + " # ");
 		auto line = console.getLine();
 		console.write("\n");
 
@@ -94,7 +99,7 @@ void shell(Console &console) {
 			}
 		} else if(cmd == "cd") {
 			File newDir { currentDir, parts[1] };
-			if(newDir.exists())
+			if(newDir.isChildOf(rootDir) && newDir.exists())
 				currentDir = newDir;
 		} else if(cmd == "cat") {
 			File file { currentDir, parts[1] };
@@ -145,11 +150,12 @@ int main(int argc, char **argv) {
 				else
 					break;
 			}
-/*
+
 			console.put(0,0,"┌─────────────┐");
 			console.put(0,1,"│             │");
 			console.put(0,2,"└─────────────┘");
 			console.flush();
+/*
 ╋━┃
   ╋			
 
