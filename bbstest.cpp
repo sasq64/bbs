@@ -12,6 +12,11 @@ using namespace std;
 using namespace bbs;
 using namespace utils;
 
+void square(int x, int y, int w, int h, bool shadow = false) {
+//┌┐
+//└┘
+}
+
 int menu(Console &console, const vector<pair<char, string>> &entries) {
 
 	auto contents = console.getTiles();
@@ -127,8 +132,7 @@ int main(int argc, char **argv) {
 			auto h = console.getHeight();
 			auto w = console.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
-
-			while(true) {
+			while(true) {	
 				int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
 				LOGD("WHAT %d", what);
 				if(what == 2) {
@@ -141,7 +145,25 @@ int main(int argc, char **argv) {
 				else
 					break;
 			}
+/*
+			console.put(0,0,"┌─────────────┐");
+			console.put(0,1,"│             │");
+			console.put(0,2,"└─────────────┘");
+			console.flush();
+╋━┃
+  ╋			
 
+╱╲╳
+╭─╮
+╰─╯
+┌┐
+└┘
+─│┼
+ 
+▖▗▘▙▚▛▜▝▞▟
+
+▒
+*/
 			console.write("\nNAME:");
 			auto userName = console.getLine();
 			chatLines.push_back(userName + " joined");
@@ -151,6 +173,8 @@ int main(int argc, char **argv) {
 			console.clear();
 			console.fill(Console::BLUE, 0, -2, 0, 1);
 			console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
+			//session.write("░▒▓█");
+
 			console.moveCursor(0, -1);
 			
 			auto lineEd = make_unique<LineEditor>(console);
