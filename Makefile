@@ -10,8 +10,10 @@ TARGET := utest
 LIBS := -lz
 OBJS := bbstest.o
 
-LINUX_CC := gcc-4.7
-LINUX_CXX := g++-4.7
+LINUX_CC := clang #gcc-4.7
+LINUX_CXX := clang++ #g++-4.7
+#CFLAGS += -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8
+
 
 LINUX_CFLAGS := $(LINUX_CFLAGS) `curl-config --cflags`
 LINUX_LIBS := `curl-config --libs`

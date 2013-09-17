@@ -12,9 +12,27 @@ using namespace std;
 using namespace bbs;
 using namespace utils;
 
-void square(int x, int y, int w, int h, bool shadow = false) {
+void square(Console &console, int x, int y, int w, int h, bool shadow = false) {
 //┌┐
-//└┘
+//└┘─│
+
+	for(auto xx = 0; xx<w; xx++) {
+		console.put(x+xx,y, L'─');
+		console.put(x+xx,y+h-1, L'─');
+		console.put(x+xx+1,y+h, L'▒');
+	}
+
+	for(auto yy = 0; yy<h; yy++) {
+		console.put(x,y+yy, L'│');
+		console.put(x+w-1,y+yy, L'│');
+		console.put(x+w,y+yy+1, L'▒');
+	}
+
+	console.put(x,y, L'┌');
+	console.put(x+w-1,y, L'┐');
+	console.put(x,y+h-1, L'└');
+	console.put(x+w-1,y+h-1, L'┘');
+
 }
 
 int menu(Console &console, const vector<pair<char, string>> &entries) {
@@ -36,12 +54,17 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 	auto menux = (w - menuw)/2;
 	auto menuy = (h - menuh)/2;
 
+	console.setColor(Console::WHITE, Console::LIGHT_GREY);
+
 	console.fill(Console::LIGHT_GREY, menux, menuy, menuw, menuh);
+	square(console, menux, menuy, menuw, menuh);
 	auto y = menuy+1;
 	for(const auto &e : entries) {
 		console.put(menux+1, y++, format("[%c] %s", e.first, e.second));
 	}
 	console.flush();
+
+	console.setColor(Console::BLACK, Console::BLACK);
 
 	while(true) {
 		auto k = console.getKey();
@@ -52,6 +75,7 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 		});
 		if(it != entries.end()) {
 			console.setTiles(contents);
+			console.setColor(Console::WHITE, Console::BLACK);
 			return it - entries.begin();
 		}
 	}
@@ -76,7 +100,7 @@ void shell(Console &console) {
 	File rootDir = { "/home/sasq/projects/bbs" };
 	auto rootName = rootDir.getName();
 	auto rootLen = rootName.length();
-	File currentDir = rootDir;
+	auto currentDir = rootDir;
 
 	while(true) {
 
@@ -95,7 +119,10 @@ void shell(Console &console) {
 
 		if(cmd == "ls") {
 			for(const auto &f : currentDir.listFiles()) {
-				console.write(format("%-32s %s\n", path_filename(f.getName()), makeSize(f.getSize())));
+				auto n = path_filename(f.getName());
+				if(f.isDir())
+					n += "/";
+				console.write(format("%-32s %s\n", n, makeSize(f.getSize())));
 			}
 		} else if(cmd == "cd") {
 			File newDir { currentDir, parts[1] };
