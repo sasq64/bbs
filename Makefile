@@ -6,7 +6,7 @@ MODULE_DIR = ../utils
 CFLAGS += -I$(MODULE_DIR) -I$(MODULE_DIR)/netlink
 MODULES := $(MODULE_DIR)/coreutils $(MODULE_DIR)/bbsutils $(MODULE_DIR)/webutils $(MODULE_DIR)/netlink
 
-TARGET := utest
+TARGET := bbs
 LIBS := -lz
 OBJS := bbstest.o
 
@@ -21,6 +21,6 @@ LINUX_LIBS := `curl-config --libs`
 all : start_rule
 
 run :
-	./utest
+	./bbs
 
 include $(MODULE_DIR)/Makefile.inc

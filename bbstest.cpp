@@ -5,6 +5,9 @@
 #include <bbsutils/console.h>
 #include <bbsutils/editor.h>
 
+#include <bbsutils/ansiconsole.h>
+#include <bbsutils/petsciiconsole.h>
+
 #include <string>
 #include <algorithm>
 
@@ -178,14 +181,14 @@ int main(int argc, char **argv) {
 					break;
 			}
 
-			console.put(0,0,"┌─────────────┐");
-			console.put(0,1,"│             │");
-			console.put(0,2,"└─────────────┘");
+			console.put(0,0,"┏──────────────┐");
+			console.put(0,1,"│NAME:         │");
+			console.put(0,2,"└──────────────┛");
 			console.flush();
 /*
 ╋━┃
   ╋			
-
+┏┓┗┛
 ╱╲╳
 ╭─╮
 ╰─╯
@@ -197,8 +200,9 @@ int main(int argc, char **argv) {
 
 ▒
 */
-			console.write("\nNAME:");
-			auto userName = console.getLine();
+			//console.write("\nNAME:");
+			console.moveCursor(6, 1);
+			auto userName = console.getLine(9);
 			chatLines.push_back(userName + " joined");
 
 			uint lastLine = 0;
@@ -210,7 +214,7 @@ int main(int argc, char **argv) {
 
 			console.moveCursor(0, -1);
 			
-			auto lineEd = make_unique<LineEditor>(console);
+			auto lineEd = make_unique<LineEditor>(console, 10);
 
 			{ lock_guard<mutex> guard(chatLock);
 				if((int)chatLines.size() > h)
@@ -229,7 +233,7 @@ int main(int argc, char **argv) {
 					}
 					console.fill(Console::BLACK, 0, -1, 0, 1);
 					console.moveCursor(0, -1);
-					lineEd = make_unique<LineEditor>(console);
+					lineEd = make_unique<LineEditor>(console, 10);
 					break;
 				case Console::KEY_F7:
 					menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
