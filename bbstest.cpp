@@ -1,4 +1,4 @@
-
+// 
 #include <coreutils/log.h>
 #include <coreutils/utils.h>
 #include <bbsutils/telnetserver.h>
@@ -135,6 +135,24 @@ void shell(Console &console) {
 			File file { currentDir, parts[1] };
 			string contents((char*)file.getPtr(), file.getSize());
 			console.write(contents);
+			console.write("\n");
+		} else if(cmd == "ed") {
+			auto saved = console.getTiles();
+			auto x = console.getCursorX();
+			auto y = console.getCursorY();
+			File file { currentDir, parts[1] };
+			string contents((char*)file.getPtr(), file.getSize());
+			FullEditor ed(console);
+			ed.setString(contents);
+			while(true) {
+				auto rc = ed.update(500);
+				if(rc == Console::KEY_F1) {
+					console.setTiles(saved);					
+					console.flush();
+					console.moveCursor(x, y);
+					break;
+				}
+			}
 		} else if(cmd == "exit")
 			return;
 	}
@@ -143,8 +161,7 @@ void shell(Console &console) {
 int main(int argc, char **argv) {
 
 	setvbuf(stdout, NULL, _IONBF, 0);
-
-	logging::setLevel(logging::DEBUG);
+	//logging::setLevel(logging::INFO);
 
 	vector<string> chatLines;
 	mutex chatLock;
@@ -164,6 +181,7 @@ int main(int argc, char **argv) {
 			Console &console = *con;
 
 			console.flush();
+
 			auto h = console.getHeight();
 			auto w = console.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
@@ -226,7 +244,7 @@ int main(int argc, char **argv) {
 				if(key >= 0)
 					LOGD("Key %d", key);
 				switch(key) {
-				case 0:
+				case Console::KEY_ENTER:
 					{ lock_guard<mutex> guard(chatLock);
 						auto line = lineEd->getResult();
 						chatLines.push_back(userName + ": " + line);
