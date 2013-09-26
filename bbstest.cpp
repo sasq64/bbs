@@ -146,7 +146,7 @@ void shell(Console &console) {
 			ed.setString(contents);
 			while(true) {
 				auto rc = ed.update(500);
-				if(rc == Console::KEY_F1) {
+				if(rc == Console::KEY_F7) {
 					console.setTiles(saved);					
 					console.flush();
 					console.moveCursor(x, y);
@@ -164,6 +164,7 @@ int main(int argc, char **argv) {
 	//logging::setLevel(logging::INFO);
 
 	vector<string> chatLines;
+	vector<string> users;
 	mutex chatLock;
 
 	TelnetServer telnet { 12345 };
@@ -185,6 +186,14 @@ int main(int argc, char **argv) {
 			auto h = console.getHeight();
 			auto w = console.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
+
+			console.write("NAME:");
+			auto userName = console.getLine();
+			console.write("\nPASSWORD:");
+			auto password = console.getPassword();
+
+			LOGD("%s logged in", userName);
+
 			while(true) {	
 				int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
 				LOGD("WHAT %d", what);
@@ -199,29 +208,17 @@ int main(int argc, char **argv) {
 					break;
 			}
 
-			console.put(0,0,"┏──────────────┐");
+			/*console.put(0,0,"┏──────────────┐");
 			console.put(0,1,"│NAME:         │");
 			console.put(0,2,"└──────────────┛");
 			console.flush();
-/*
-╋━┃
-  ╋			
-┏┓┗┛
-╱╲╳
-╭─╮
-╰─╯
-┌┐
-└┘
-─│┼
- 
-▖▗▘▙▚▛▜▝▞▟
 
-▒
-*/
-			//console.write("\nNAME:");
 			console.moveCursor(6, 1);
-			auto userName = console.getLine(9);
-			chatLines.push_back(userName + " joined");
+			userName = console.getLine(9);*/
+			{ lock_guard<mutex> guard(chatLock);
+				chatLines.push_back(userName + " joined");
+				users.push_back(userName);
+			}
 
 			uint lastLine = 0;
 			auto ypos = 0;
@@ -232,7 +229,7 @@ int main(int argc, char **argv) {
 
 			console.moveCursor(0, -1);
 			
-			auto lineEd = make_unique<LineEditor>(console, 10);
+			auto lineEd = make_unique<LineEditor>(console);
 
 			{ lock_guard<mutex> guard(chatLock);
 				if((int)chatLines.size() > h)
@@ -251,10 +248,26 @@ int main(int argc, char **argv) {
 					}
 					console.fill(Console::BLACK, 0, -1, 0, 1);
 					console.moveCursor(0, -1);
-					lineEd = make_unique<LineEditor>(console, 10);
+					//lineEd = make_unique<LineEditor>(console, 10);
+					lineEd->setString("");
 					break;
 				case Console::KEY_F7:
-					menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+					{
+						int rc = menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+						if(rc == 2) {
+							lock_guard<mutex> guard(chatLock);
+							for(auto &u : users) {
+								ypos++;
+								if(ypos > h-2) {
+									console.scrollScreen(1);
+									console.fill(Console::BLACK, 0, -3, 0, 1);
+									console.fill(Console::BLUE, 0, -2, 0, 1);
+									ypos--;
+								}
+								console.put(0, ypos-1, u);
+							}
+						}
+					}
 					break;
 				}
 
