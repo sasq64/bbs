@@ -83,7 +83,111 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 		}
 	}
 	//return k;
+}
 
+vector<string> chatLines;
+vector<string> users;
+mutex chatLock;
+
+void chat(Console &console, string userName) {
+
+	{ lock_guard<mutex> guard(chatLock);
+		chatLines.push_back(userName + " joined");
+		users.push_back(userName);
+	}
+
+	auto w = console.getWidth();
+	auto h = console.getHeight();
+
+	uint lastLine = 0;
+	auto ypos = 0;
+	console.clear();
+	console.fill(Console::BLUE, 0, -2, 0, 1);
+	console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
+	//session.write("░▒▓█");
+
+	console.moveCursor(0, -1);
+	
+	auto lineEd = make_unique<LineEditor>(console);
+
+	{ lock_guard<mutex> guard(chatLock);
+		if((int)chatLines.size() > h)
+			lastLine = chatLines.size() - h;
+	}
+	while(true) {
+
+		{ lock_guard<mutex> guard(chatLock);
+			auto newLines = false;
+			while(chatLines.size() > lastLine) {
+				newLines = true;
+				auto msg = chatLines[lastLine++];
+				auto wrapped = text_wrap(msg, w, w-2);
+				bool first = true;
+				for(auto &l : wrapped) {
+					ypos++;
+					if(ypos > h-2) {
+						console.scrollScreen(1);
+						console.fill(Console::BLACK, 0, -3, 0, 1);
+						console.fill(Console::BLUE, 0, -2, 0, 1);
+						ypos--;
+					}
+					if(first) {
+						auto colon = l.find(':');
+						if(colon != string::npos) {									
+							console.put(0, ypos-1, l.substr(0,colon), Console::LIGHT_BLUE);
+							console.put(colon, ypos-1, l.substr(colon));
+						} else
+							console.put(0, ypos-1, l);
+					} else {
+						console.put(0, ypos-1, "::", Console::DARK_GREY);
+						console.put(2, ypos-1, l);
+					}
+					first = false;
+				}
+			}
+			if(newLines)
+				lineEd->refresh();
+
+			console.flush();
+		}
+
+		auto key = lineEd->update(500);
+		if(key >= 0)
+			LOGD("Key %d", key);
+		switch(key) {
+		case Console::KEY_ENTER:
+			{ lock_guard<mutex> guard(chatLock);
+				auto line = lineEd->getResult();
+				chatLines.push_back(userName + ": " + line);
+			}
+			console.fill(Console::BLACK, 0, -1, 0, 1);
+			console.moveCursor(0, -1);
+			//lineEd = make_unique<LineEditor>(console, 10);
+			lineEd->setString("");
+			break;
+		case Console::KEY_F7:
+			{
+				int rc = menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+				if(rc == 1) {
+					return;
+				} else
+				if(rc == 2) {
+					lock_guard<mutex> guard(chatLock);
+					for(auto &u : users) {
+						ypos++;
+						if(ypos > h-2) {
+							console.scrollScreen(1);
+							console.fill(Console::BLACK, 0, -3, 0, 1);
+							console.fill(Console::BLUE, 0, -2, 0, 1);
+							ypos--;
+						}
+						console.put(0, ypos-1, u);
+					}
+				}
+			}
+			break;
+		}
+	}
 }
 
 string makeSize(int bytes) {
@@ -163,9 +267,8 @@ int main(int argc, char **argv) {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	//logging::setLevel(logging::INFO);
 
-	vector<string> chatLines;
-	vector<string> users;
-	mutex chatLock;
+	// Turn off logging from the utility classes
+	//logging::useLogSpace("utils", false);
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
@@ -205,92 +308,8 @@ int main(int argc, char **argv) {
 				if(what == 1)
 					shell(console);
 				else
-					break;
-			}
-
-			/*console.put(0,0,"┏──────────────┐");
-			console.put(0,1,"│NAME:         │");
-			console.put(0,2,"└──────────────┛");
-			console.flush();
-
-			console.moveCursor(6, 1);
-			userName = console.getLine(9);*/
-			{ lock_guard<mutex> guard(chatLock);
-				chatLines.push_back(userName + " joined");
-				users.push_back(userName);
-			}
-
-			uint lastLine = 0;
-			auto ypos = 0;
-			console.clear();
-			console.fill(Console::BLUE, 0, -2, 0, 1);
-			console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
-			//session.write("░▒▓█");
-
-			console.moveCursor(0, -1);
-			
-			auto lineEd = make_unique<LineEditor>(console);
-
-			{ lock_guard<mutex> guard(chatLock);
-				if((int)chatLines.size() > h)
-					lastLine = chatLines.size() - h;
-			}
-			while(true) {
-
-				auto key = lineEd->update(500);
-				if(key >= 0)
-					LOGD("Key %d", key);
-				switch(key) {
-				case Console::KEY_ENTER:
-					{ lock_guard<mutex> guard(chatLock);
-						auto line = lineEd->getResult();
-						chatLines.push_back(userName + ": " + line);
-					}
-					console.fill(Console::BLACK, 0, -1, 0, 1);
-					console.moveCursor(0, -1);
-					//lineEd = make_unique<LineEditor>(console, 10);
-					lineEd->setString("");
-					break;
-				case Console::KEY_F7:
-					{
-						int rc = menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
-						if(rc == 2) {
-							lock_guard<mutex> guard(chatLock);
-							for(auto &u : users) {
-								ypos++;
-								if(ypos > h-2) {
-									console.scrollScreen(1);
-									console.fill(Console::BLACK, 0, -3, 0, 1);
-									console.fill(Console::BLUE, 0, -2, 0, 1);
-									ypos--;
-								}
-								console.put(0, ypos-1, u);
-							}
-						}
-					}
-					break;
-				}
-
-				{ lock_guard<mutex> guard(chatLock);
-					auto newLines = false;
-					while(chatLines.size() > lastLine) {
-						newLines = true;
-						auto msg = chatLines[lastLine++];
-						ypos++;
-						if(ypos > h-2) {
-							console.scrollScreen(1);
-							console.fill(Console::BLACK, 0, -3, 0, 1);
-							console.fill(Console::BLUE, 0, -2, 0, 1);
-							ypos--;
-						}
-						console.put(0, ypos-1, msg);
-
-					}
-					if(newLines)
-						lineEd->refresh();
-
-					console.flush();
-				}
+				if(what == 0)
+					chat(console, userName);
 			}
 		} catch (TelnetServer::disconnect_excpetion e) {
 			LOGD("Client disconnected");
