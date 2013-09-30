@@ -3,11 +3,11 @@ CFLAGS := -g -Wall -O2
 CXXFLAGS := -std=c++0x
 
 MODULE_DIR = ../utils
-CFLAGS += -I$(MODULE_DIR) -I$(MODULE_DIR)/netlink
+CFLAGS += -I$(MODULE_DIR) -I$(MODULE_DIR)/netlink -pthread
 MODULES := $(MODULE_DIR)/coreutils $(MODULE_DIR)/bbsutils $(MODULE_DIR)/netlink
 
 TARGET := bbs
-LIBS := -lz
+LIBS := -pthread -lz
 OBJS := bbstest.o
 
 LINUX_CC := clang #gcc-4.7

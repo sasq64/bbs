@@ -15,9 +15,7 @@ using namespace std;
 using namespace bbs;
 using namespace utils;
 
-void square(Console &console, int x, int y, int w, int h, bool shadow = false) {
-//┌┐
-//└┘─│
+void draw_square(Console &console, int x, int y, int w, int h, bool shadow = false) {
 
 	for(auto xx = 0; xx<w; xx++) {
 		console.put(x+xx,y, L'─');
@@ -60,7 +58,7 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 	console.setColor(Console::WHITE, Console::LIGHT_GREY);
 
 	console.fill(Console::LIGHT_GREY, menux, menuy, menuw, menuh);
-	square(console, menux, menuy, menuw, menuh);
+	draw_square(console, menux, menuy, menuw, menuh);
 	auto y = menuy+1;
 	for(const auto &e : entries) {
 		console.put(menux+1, y++, format("[%c] %s", e.first, e.second));
@@ -82,7 +80,6 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 			return it - entries.begin();
 		}
 	}
-	//return k;
 }
 
 vector<string> chatLines;
@@ -101,11 +98,22 @@ void chat(Console &console, string userName) {
 
 	uint lastLine = 0;
 	auto ypos = 0;
+
+	auto addLine = [&](const string &line) {
+		ypos++;
+		if(ypos > h-2) {
+			console.scrollScreen(1);
+			console.fill(Console::BLACK, 0, -3, 0, 1);
+			console.fill(Console::BLUE, 0, -2, 0, 1);
+			console.put(-13, -2, "F7 = Options", Console::WHITE, Console::BLUE);
+			ypos--;
+		}
+		console.put(0, ypos-1, line);
+	};
+
 	console.clear();
 	console.fill(Console::BLUE, 0, -2, 0, 1);
-	console.put(0, -2, "NAME: " + userName, Console::CURRENT_COLOR, Console::BLUE);
-	//session.write("░▒▓█");
-
+	console.put(-13, -2, "F7 = Options", Console::WHITE, Console::BLUE);
 	console.moveCursor(0, -1);
 	
 	auto lineEd = make_unique<LineEditor>(console);
@@ -124,13 +132,7 @@ void chat(Console &console, string userName) {
 				auto wrapped = text_wrap(msg, w, w-2);
 				bool first = true;
 				for(auto &l : wrapped) {
-					ypos++;
-					if(ypos > h-2) {
-						console.scrollScreen(1);
-						console.fill(Console::BLACK, 0, -3, 0, 1);
-						console.fill(Console::BLUE, 0, -2, 0, 1);
-						ypos--;
-					}
+					addLine(l);
 					if(first) {
 						auto colon = l.find(':');
 						if(colon != string::npos) {									
@@ -152,8 +154,7 @@ void chat(Console &console, string userName) {
 		}
 
 		auto key = lineEd->update(500);
-		if(key >= 0)
-			LOGD("Key %d", key);
+
 		switch(key) {
 		case Console::KEY_ENTER:
 			{ lock_guard<mutex> guard(chatLock);
@@ -162,26 +163,30 @@ void chat(Console &console, string userName) {
 			}
 			console.fill(Console::BLACK, 0, -1, 0, 1);
 			console.moveCursor(0, -1);
-			//lineEd = make_unique<LineEditor>(console, 10);
 			lineEd->setString("");
 			break;
 		case Console::KEY_F7:
 			{
 				int rc = menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
+				if(rc == 0) {
+					console.moveCursor(0,-2);
+					console.setColor(Console::WHITE, Console::BLUE);
+					console.write("NEW NAME:");
+					auto newName = console.getLine();
+					console.setColor(Console::WHITE, Console::BLACK);
+					addLine(format("%s changed his name to %s", userName, newName));
+					userName = newName;
+					console.fill(Console::BLUE, 0, -2, 0, 1);
+					console.put(-13, -2, "F7 = Options", Console::WHITE, Console::BLUE);
+					console.moveCursor(0, -1);
+				} else
 				if(rc == 1) {
 					return;
 				} else
 				if(rc == 2) {
 					lock_guard<mutex> guard(chatLock);
 					for(auto &u : users) {
-						ypos++;
-						if(ypos > h-2) {
-							console.scrollScreen(1);
-							console.fill(Console::BLACK, 0, -3, 0, 1);
-							console.fill(Console::BLUE, 0, -2, 0, 1);
-							ypos--;
-						}
-						console.put(0, ypos-1, u);
+						addLine(u);
 					}
 				}
 			}
@@ -202,7 +207,8 @@ string makeSize(int bytes) {
 
 void shell(Console &console) {
 
-	console.write("System shell. Use 'exit' to quit\n\n");
+	console.clear();
+	console.write("\nSystem shell. 'help' for commands\n\n");
 
 	File rootDir = { "/home/sasq/projects/bbs" };
 	auto rootName = rootDir.getName();
@@ -223,8 +229,9 @@ void shell(Console &console) {
 			continue;
 		auto cmd = parts[0];
 
-
-		if(cmd == "ls") {
+		if(cmd == "help") {
+			console.write("Commands:\n ls\n cd <directory>\n cat <filename>\n ed <filename>\n exit\n");
+		} else if(cmd == "ls") {
 			for(const auto &f : currentDir.listFiles()) {
 				auto n = path_filename(f.getName());
 				if(f.isDir())
@@ -242,8 +249,7 @@ void shell(Console &console) {
 			console.write("\n");
 		} else if(cmd == "ed") {
 			auto saved = console.getTiles();
-			auto x = console.getCursorX();
-			auto y = console.getCursorY();
+			auto xy = console.getCursor();
 			File file { currentDir, parts[1] };
 			string contents((char*)file.getPtr(), file.getSize());
 			FullEditor ed(console);
@@ -253,7 +259,7 @@ void shell(Console &console) {
 				if(rc == Console::KEY_F7) {
 					console.setTiles(saved);					
 					console.flush();
-					console.moveCursor(x, y);
+					console.moveCursor(xy);
 					break;
 				}
 			}
@@ -299,9 +305,7 @@ int main(int argc, char **argv) {
 
 			while(true) {	
 				int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
-				LOGD("WHAT %d", what);
 				if(what == 2) {
-					//session.disconnect();
 					session.close();
 					return;
 				} else
