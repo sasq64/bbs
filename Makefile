@@ -10,20 +10,19 @@ TARGET := bbs
 LIBS := -pthread -lz
 OBJS := bbstest.o
 
-LINUX_CC := clang #gcc-4.7
-LINUX_CXX := clang++ #g++-4.7
+#LINUX_CC := clang #gcc-4.7
+#LINUX_CXX := clang++ #g++-4.7
 #CFLAGS += -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8
 
 #CC=arm-linux-androideabi-clang
 #CXX=arm-linux-androideabi-clang++
 
+LINUX_CC=ccache clang -Qunused-arguments
+LINUX_CXX=ccache clang++ -Qunused-arguments
 
 #LINUX_CFLAGS := $(LINUX_CFLAGS) `curl-config --cflags`
 #LINUX_LIBS := `curl-config --libs`
 
 all : start_rule
-
-run :
-	./bbs
 
 include $(MODULE_DIR)/Makefile.inc

@@ -1,12 +1,15 @@
 // 
 #include <coreutils/log.h>
 #include <coreutils/utils.h>
+#include <coreutils/file.h>
 #include <bbsutils/telnetserver.h>
 #include <bbsutils/console.h>
 #include <bbsutils/editor.h>
 
 #include <bbsutils/ansiconsole.h>
 #include <bbsutils/petsciiconsole.h>
+
+
 
 #include <string>
 #include <algorithm>
@@ -268,6 +271,50 @@ void shell(Console &console) {
 	}
 }
 
+int screen2pet(int x) {
+	if(x == 94) x = 255;
+	else if(x < 32) x += 64;
+	else if(x < 64) x += 0;
+	else if(x < 96) x += 128;
+	else if(x < 128) x += 64;
+	else if(x < 160) x -= 64;
+	else if(x < 192) x -= 128;
+	else if(x >= 224) x -= 64;
+	return x;
+}
+
+void showPetscii(Console &console, const std::string &name) {
+
+	static vector<Console::Color> colors = { Console::BLACK, Console::WHITE, Console::RED, Console::CYAN, Console::PURPLE, Console::GREEN, Console::BLUE, Console::YELLOW, Console::ORANGE, Console::BROWN, Console::PINK, Console::DARK_GREY, Console::GREY, Console::LIGHT_GREEN, Console::LIGHT_BLUE, Console::LIGHT_GREY };
+
+	auto tiles = console.getTiles();
+	File f { name };
+	vector<uint8_t> ch(1000);
+	vector<uint8_t> col(1000);
+	f.read(&ch[0], 1000);
+	f.read(&col[0], 1000);
+
+	int i = 0;
+	for(auto &t : tiles) {
+		t.c = screen2pet(ch[i]);
+		if(ch[i] < 128) {
+			t.fg = colors[col[i++] & 0xf];
+			t.bg = Console::BLACK;
+		} else {
+			t.bg = colors[col[i++] & 0xf];
+			t.fg = Console::BLACK;
+		}
+	}
+	console.rawPut(142);
+	console.setTiles(tiles);
+	console.flush();
+	console.moveCursor(39, 24);
+	console.setColor(Console::BLACK, Console::BLACK);
+	console.getKey();
+	console.clear();
+	console.rawPut(14);
+}
+
 int main(int argc, char **argv) {
 
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -290,29 +337,42 @@ int main(int argc, char **argv) {
 			}
 			Console &console = *con;
 
-			console.flush();
+			console.clear();
 
 			auto h = console.getHeight();
 			auto w = console.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
 
+
 			console.write("NAME:");
 			auto userName = console.getLine();
-			console.write("\nPASSWORD:");
-			auto password = console.getPassword();
+
+			//console.write("\nPASSWORD:");
+			//auto password = console.getPassword();
 
 			LOGD("%s logged in", userName);
 
 			while(true) {	
-				int what = menu(console, { { 'c', "Enter chat" }, { 's', "Start shell" }, { 'x', "Log out" } });
+				int what = menu(console, { { 'p', "Petscii Art" }, { 'c', "Enter chat" }, { 'x', "Log out" } });
 				if(what == 2) {
 					session.close();
 					return;
 				} else
+				if(what == 0) {
+					//shell(console);
+					static vector<string> pics = { "art/pilt.c64", "art/ninja.c64", "art/loppy.c64", "art/gary.c64", "art/victor.c64", "art/robot.c64" };
+					int pic = menu(console, {
+						{ '1', "Pal - Petscii & Pilt" },
+						{ '2', "wile coyote - The Last Ninja" },
+						{ '3', "Redcrab - I HAS FLOPPY!!" },
+						{ '4', "Mermaid - Gary" },
+						{ '5', "Mermaid - Victor Charlie" },
+						{ '6', "wile coyote - Daft Robot" },
+				});
+					if(pic >= 0)
+						showPetscii(console, pics[pic]);
+				} else
 				if(what == 1)
-					shell(console);
-				else
-				if(what == 0)
 					chat(console, userName);
 			}
 		} catch (TelnetServer::disconnect_excpetion e) {
