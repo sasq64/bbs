@@ -10,9 +10,10 @@
 #include <bbsutils/petsciiconsole.h>
 
 
-
+#include <unordered_set>
 #include <string>
 #include <algorithm>
+#include <functional>
 
 using namespace std;
 using namespace bbs;
@@ -85,15 +86,56 @@ int menu(Console &console, const vector<pair<char, string>> &entries) {
 	}
 }
 
+
+class User {
+public:
+	User(const string &name = "") : n(name), f(0) {}
+	User& operator=(const User &u) {
+		n = u.n;
+		f = u.f;
+		return *this;
+	}
+
+	string name() const { return n; }
+	int flags() const { return f; }
+	void setFlags(int flags) { f |= flags; }
+	void clearFlags(int flags) { f &= ~flags; }
+	bool operator==(const User &u) const {
+		return (u.n == n);
+	}
+	bool operator!=(const User &u) const {
+		return !(*this == u);
+	}
+private:
+	string n;
+	int f;
+};
+
+template <> struct hash<User> {
+    typedef User argument_type;
+    typedef std::size_t result_type;
+    result_type operator()(const User &u) const {
+    	return hash_fn(u.name());
+    }
+	std::hash<std::string> hash_fn;
+  };
+
 vector<string> chatLines;
-vector<string> users;
+unordered_set<User> users;
+//set<string> chatUsers;
 mutex chatLock;
+
+void addChatLine(const string &line) {
+	lock_guard<mutex> guard(chatLock);
+	chatLines.push_back(line);
+};
+
 
 void chat(Console &console, string userName) {
 
 	{ lock_guard<mutex> guard(chatLock);
 		chatLines.push_back(userName + " joined");
-		users.push_back(userName);
+		//chatUsers.insert(userName);
 	}
 
 	auto w = console.getWidth();
@@ -170,8 +212,8 @@ void chat(Console &console, string userName) {
 			break;
 		case Console::KEY_F7:
 			{
-				int rc = menu(console, { { 'c', "Change Name" }, { 'x', "Leave chat" }, { 'l', "List Users" } });
-				if(rc == 0) {
+				int rc = menu(console, { { 'x', "Leave chat" }, { 'l', "List Users" } });
+				/*if(rc == 0) {
 					console.moveCursor(0,-2);
 					console.setColor(Console::WHITE, Console::BLUE);
 					console.write("NEW NAME:");
@@ -182,14 +224,17 @@ void chat(Console &console, string userName) {
 					console.fill(Console::BLUE, 0, -2, 0, 1);
 					console.put(-13, -2, "F7 = Options", Console::WHITE, Console::BLUE);
 					console.moveCursor(0, -1);
-				} else
-				if(rc == 1) {
+				} else*/
+				if(rc == 0) {
 					return;
 				} else
-				if(rc == 2) {
+				if(rc == 1) {
 					lock_guard<mutex> guard(chatLock);
 					for(auto &u : users) {
-						addLine(u);
+						string l = u.name();
+						if(u.flags() & 1)
+							l += " (in chat)";
+						addLine(l);
 					}
 				}
 			}
@@ -325,6 +370,7 @@ int main(int argc, char **argv) {
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
+		User user;
 		try {
 			session.echo(false);
 			auto termType = session.getTermType();		
@@ -339,44 +385,90 @@ int main(int argc, char **argv) {
 
 			console.clear();
 
-			auto h = console.getHeight();
-			auto w = console.getWidth();
+			auto h = session.getHeight();
+			auto w = session.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
 
+			console.flush();
 
-			console.write("NAME:");
-			auto userName = console.getLine();
+			while(true) {
+				console.write("NAME:");
+				user = User(console.getLine());
 
+				{ lock_guard<mutex> guard(chatLock);
+
+					if(users.count(user) == 0) {
+						chatLines.push_back(user.name() + " logged in");
+						users.insert(user);
+						break;
+					} else {
+						console.write("\n** User already logged in\n");
+					}
+				}
+			}
 			//console.write("\nPASSWORD:");
 			//auto password = console.getPassword();
 
-			LOGD("%s logged in", userName);
+			LOGD("%s logged in", user.name());
 
 			while(true) {	
 				int what = menu(console, { { 'p', "Petscii Art" }, { 'c', "Enter chat" }, { 'x', "Log out" } });
 				if(what == 2) {
 					session.close();
+					LOGD("Client logged out");
+					addChatLine(user.name() + " logged out");
+					{ lock_guard<mutex> guard(chatLock);
+						users.erase(user);
+					}
 					return;
 				} else
 				if(what == 0) {
 					//shell(console);
-					static vector<string> pics = { "art/pilt.c64", "art/ninja.c64", "art/loppy.c64", "art/gary.c64", "art/victor.c64", "art/robot.c64" };
-					int pic = menu(console, {
-						{ '1', "Pal - Petscii & Pilt" },
-						{ '2', "wile coyote - The Last Ninja" },
-						{ '3', "Redcrab - I HAS FLOPPY!!" },
-						{ '4', "Mermaid - Gary" },
-						{ '5', "Mermaid - Victor Charlie" },
-						{ '6', "wile coyote - Daft Robot" },
-				});
-					if(pic >= 0)
-						showPetscii(console, pics[pic]);
+					while(true) {
+						static vector<string> pics = { "pilt.c64", "ninja.c64", "floppy.c64", "gary.c64", "victor.c64", "robot.c64",
+						                                "bigc.c64", "play.c64", "voodoo.c64", "santa.c64", "saved.c64", "bigc.c64" };
+						int pic = menu(console, {
+							{ '1', "Pal - Petscii & Pilt" },
+							{ '2', "wile coyote - The Last Ninja" },
+							{ '3', "Redcrab - I HAS FLOPPY!!" },
+							{ '4', "Mermaid - Gary" },
+							{ '5', "Mermaid - Victor Charlie" },
+							{ '6', "wile coyote - Daft Robot" },
+							{ '7', "Nuckhead - Big C" },
+							{ '8', "ilesj - Hey let's play!" },
+							{ '9', "wile coyote - voodoo love" },
+							{ 'a', "Hermit - Mikulas vs Krampusz" },
+							{ 'b', "Uneksija - T.D.T.W.W.N.S" },
+							{ 'x', "BACK" },
+						});
+						if(pic == 11)
+							break;
+						if(pic >= 0) {
+							try {
+								showPetscii(console, string("art/") + pics[pic]);
+							} catch(utils::file_not_found_exception &e) {
+								LOGD("Could not find '%s'", pics[pic]);
+							}
+						}
+					}
 				} else
-				if(what == 1)
-					chat(console, userName);
+				if(what == 1) {
+					users.erase(user);	
+					user.setFlags(1);
+					users.insert(user);
+					chat(console, user.name());
+					users.erase(user);	
+					user.clearFlags(1);
+					users.insert(user);
+				}
 			}
+
 		} catch (TelnetServer::disconnect_excpetion e) {
 			LOGD("Client disconnected");
+			addChatLine(user.name() + " disconnected");
+			{ lock_guard<mutex> guard(chatLock);
+				users.erase(user);
+			}
 		}
 	});
 	telnet.run();
