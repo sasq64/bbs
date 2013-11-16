@@ -111,6 +111,8 @@ private:
 	int f;
 };
 
+namespace std {
+
 template <> struct hash<User> {
     typedef User argument_type;
     typedef std::size_t result_type;
@@ -119,6 +121,8 @@ template <> struct hash<User> {
     }
 	std::hash<std::string> hash_fn;
   };
+
+};
 
 vector<string> chatLines;
 unordered_set<User> users;
@@ -453,13 +457,19 @@ int main(int argc, char **argv) {
 					}
 				} else
 				if(what == 1) {
-					users.erase(user);	
-					user.setFlags(1);
-					users.insert(user);
+					{
+						lock_guard<mutex> guard(chatLock);
+						users.erase(user);	
+						user.setFlags(1);
+						users.insert(user);
+					}
 					chat(console, user.name());
-					users.erase(user);	
-					user.clearFlags(1);
-					users.insert(user);
+					{
+						lock_guard<mutex> guard(chatLock);
+						users.erase(user);	
+						user.clearFlags(1);
+						users.insert(user);
+					}
 				}
 			}
 
