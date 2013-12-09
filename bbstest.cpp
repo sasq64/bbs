@@ -397,8 +397,13 @@ int main(int argc, char **argv) {
 
 			while(true) {
 				console.write("NAME:");
-				user = User(console.getLine());
+				auto name = console.getLine();
+				if(name.length() < 3) {
+					console.write("\n** Name is 3 chars minimum\n");
+					continue;
+				}
 
+				user = User(name);
 				{ lock_guard<mutex> guard(chatLock);
 
 					if(users.count(user) == 0) {
