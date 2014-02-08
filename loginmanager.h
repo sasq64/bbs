@@ -1,3 +1,10 @@
+#ifndef LOGINMANAGER_H
+#define LOGINMANAGER_H
+
+#include <cstdint>
+#include <string>
+#include <sqlite3/database.h>
+
 class LoginManager {
 public:
 	struct User {
@@ -7,30 +14,12 @@ public:
 	};
 
 	static const uint64_t NO_USER = 0;
-
-	LoginManager() {}
-
-	uint64_t verify_user(const std::string &handle, const std::string &password) {
-		auto s = sha256(handle + "\t" + password);
-		uint64_t id = NO_USER;
-		db.execf("SELECT ROWID FROM bbsuser WHERE sha=%Q;", [&](int i, const vector<string> &result) {
-			id = std::stol(result[0]);
-		}, s);
-		return id;
-	}
-
-	uint64_t get_user(const std::string &handle) {
-		uint64_t id = NO_USER;
-		db.execf("SELECT ROWID FROM bbsuser WHERE handle=%Q;", [&](int i, const vector<string> &result) {
-			id = std::stol(result[0]);
-		}, handle);
-		return id;
-	}
-
-	uint64_t add_user(const std::string &handle, const std::string &password) {
-		auto sha = sha256(handle + "\t" + password);
-		db.exec("INSERT INTO bbsuser (sha, handle) VALUES (%Q, %Q)", sha, handle);
-		return db.last_rowid();
-	}
+	LoginManager(sqlite3db::Database &db) : db(db) {}
+	uint64_t verify_user(const std::string &handle, const std::string &password);
+	uint64_t get_user(const std::string &handle);
+	uint64_t add_user(const std::string &handle, const std::string &password);
+private:
+	sqlite3db::Database &db;
 };
 
+#endif // LOGINMANAGER_H

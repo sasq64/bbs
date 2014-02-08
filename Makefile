@@ -12,7 +12,7 @@ include $(MODULE_DIR)/crypto/module.mk
 include $(MODULE_DIR)/sqlite3/module.mk
 
 TARGET := bbs
-LOCAL_FILES += bbs.cpp
+LOCAL_FILES += bbs.cpp loginmanager.cpp messageboard.cpp comboard.cpp
 
 CC=ccache clang -Qunused-arguments
 CXX=ccache clang++ -Qunused-arguments
