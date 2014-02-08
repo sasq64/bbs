@@ -129,3 +129,68 @@ void showPetscii(Console &console, const std::string &name) {
 	console.clear();
 	console.rawPut(14);
 }
+
+struct Area {
+	Area(int x0, int y0, int x1, int y1) : x0(x0), y0(y0), x1(x1), y1(y1) {}
+	Area(std::initializer_list<int> &il) {
+		auto it = il.begin();
+		x0 = *it;
+		++it;
+		y0 = *it;
+		++it;
+		x1 = *it;
+		++it;
+		y1 = *it;
+	}
+	int x0;
+	int y0;
+	int x1;
+	int y1;
+};
+
+template <typename T> class ListView {
+public:
+
+	typedef function<void(Console &c, Area &a, int item, const T &data)> RenderFunction;
+	typedef function<T(int item)> SourceFunction;
+
+	ListView(Console &c, const Area &a, RenderFunction renderFunc, SourceFunction sourceFunc, int items) :
+		ypos(0), console(c), area(a), renderFunc(renderFunc), sourceFunc(sourceFunc), items(items) {}
+
+	void update() {
+		//auto key = console.getKey(100);
+		console.fill(Console::CURRENT_COLOR, area.x0, area.y0, area.x1-area.x0, area.y1-area.y0);
+		console.clipArea(area.x0, area.y0, area.x1, area.y1);
+		Area a = area;
+		for(int i = ypos; i<items; i++) {
+			if(a.y0 >= a.y1)
+				break;
+			renderFunc(console, a, i, sourceFunc(i));
+		}
+		console.clipArea();
+		console.flush();
+	}
+
+	static SourceFunction makeVectorSource(const vector<T> &v) {
+		return [&](int item) -> T {
+			return v[item];
+		};
+	};
+
+	static RenderFunction simpleRenderFunction;
+
+private:
+
+	int ypos;
+	Console &console;
+	Area area;
+	RenderFunction renderFunc;
+	SourceFunction sourceFunc;
+	int items;
+};
+
+
+template<> typename ListView<string>::RenderFunction ListView<string>::simpleRenderFunction =
+	[](Console &c, Area &a, int item, const string &data) {
+		c.put(a.x0, a.y0++, data);
+	};

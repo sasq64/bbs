@@ -10,75 +10,11 @@
 
 #include <crypto/sha256.h>
 #include <sqlite3/database.h>
-
+#include <time.h>
 using namespace bbs;
 using namespace utils;
 using namespace std;
 
-struct Area {
-	Area(int x0, int y0, int x1, int y1) : x0(x0), y0(y0), x1(x1), y1(y1) {}
-	Area(std::initializer_list<int> &il) {
-		auto it = il.begin();
-		x0 = *it;
-		++it;
-		y0 = *it;
-		++it;
-		x1 = *it;
-		++it;
-		y1 = *it;
-	}
-	int x0;
-	int y0;
-	int x1;
-	int y1;
-};
-
-template <typename T> class ListView {
-public:
-
-	typedef function<void(Console &c, Area &a, int item, const T &data)> RenderFunction;
-	typedef function<T(int item)> SourceFunction;
-
-	ListView(Console &c, const Area &a, RenderFunction renderFunc, SourceFunction sourceFunc, int items) :
-		ypos(0), console(c), area(a), renderFunc(renderFunc), sourceFunc(sourceFunc), items(items) {}
-
-	void update() {
-		//auto key = console.getKey(100);
-		console.fill(Console::CURRENT_COLOR, area.x0, area.y0, area.x1-area.x0, area.y1-area.y0);
-		console.clipArea(area.x0, area.y0, area.x1, area.y1);
-		Area a = area;
-		for(int i = ypos; i<items; i++) {
-			if(a.y0 >= a.y1)
-				break;
-			renderFunc(console, a, i, sourceFunc(i));
-		}
-		console.clipArea();
-		console.flush();
-	}
-
-	static SourceFunction makeVectorSource(const vector<T> &v) {
-		return [&](int item) -> T {
-			return v[item];
-		};
-	};
-
-	static RenderFunction simpleRenderFunction;
-
-private:
-
-	int ypos;
-	Console &console;
-	Area area;
-	RenderFunction renderFunc;
-	SourceFunction sourceFunc;
-	int items;
-};
-
-
-template<> typename ListView<string>::RenderFunction ListView<string>::simpleRenderFunction =
-	[](Console &c, Area &a, int item, const string &data) {
-		c.put(a.x0, a.y0++, data);
-	};
 
 sqlite3db::Database db { "bbs.db" };
 
@@ -125,11 +61,11 @@ public:
 	MessageBoard(sqlite3db::Database &db) : db(db) {}
 
 	struct Group {
-		Group(uint64_t id, const std::string &n, uint64_t lp = 0, uint64_t c = 0) : id(id), name(n), last_post(lp), creator(c) {}
+		Group(uint64_t id, const std::string &n, uint64_t lp = 0,  std::string c = "") : id(id), name(n), last_post(lp), creator(c) {}
 		const uint64_t id;
 		const std::string name;
 		const uint64_t last_post;
-		const uint64_t creator;
+		const  std::string creator;
 	};
 
 	struct Topic {
@@ -157,8 +93,8 @@ public:
 	}
 	const std::vector<Group> list_groups() {
 		vector<Group> groups;
-		db.execf("SELECT ROWID, name, creatorid, lastpost FROM msggroup", [&](int i, const vector<string> &result) {
-			groups.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), std::stol(result[3]));
+		db.execf("SELECT msggroup.ROWID, msggroup.name, msggroup.lastpost, bbsuser.handle FROM msggroup,bbsuser WHERE msggroup.creatorid=bbsuser.ROWID", [&](int i, const vector<string> &result) {
+			groups.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), result[3]);
 		});
 		return groups; // NOTE: std::move ?
 	}
@@ -186,16 +122,16 @@ public:
 	const std::vector<Topic> list_topics() {
 		vector<Topic> topics;
 		LOGD("currentGroup %d", currentGroup);
-		db.execf("SELECT ROWID,name FROM msgtopic WHERE groupid=%d", [&](int i, const vector<string> &result) {
+		db.execf("SELECT msgtopic.ROWID,name,handle,lastpost,lastby FROM msgtopic,bbsuser WHERE groupid=%d AND creatorid=bbsuser.ROWID", [&](int i, const vector<string> &result) {
 			LOGD(result[1]);
-			topics.emplace_back(std::stol(result[0]), result[1]);
+			topics.emplace_back(std::stol(result[0]), result[1], result[2]);
 		}, currentGroup);
 		return topics; // NOTE: std::move ?
 	}
 
 	const std::vector<Message> list_messages(uint64_t topic_id) {
 		vector<Message> messages;
-		db.execf("SELECT ROWID,contents,userid FROM msgtopic WHERE topicid=%d", [&](int i, const vector<string> &result) {
+		db.execf("SELECT ROWID,contents,creatorid FROM msgtopic WHERE topicid=%d", [&](int i, const vector<string> &result) {
 			LOGD(result[1]);
 			messages.emplace_back(std::stol(result[0]), result[1]);
 		}, topic_id);
@@ -204,16 +140,16 @@ public:
 
 	uint64_t post(const std::string &topic_name, const std::string &text) {
 		auto ta = db.transaction();
-		db.exec("INSERT INTO msgtopic (name, userid,groupid) VALUES (%Q, %d, %d)", topic_name, currentUser, currentGroup);
+		db.exec("INSERT INTO msgtopic (name, creatorid,groupid) VALUES (%Q, %d, %d)", topic_name, currentUser, currentGroup);
 		auto topicid = db.last_rowid();
-		db.exec("INSERT INTO message (contents, userid, parentid, topicid) VALUES (%Q, %d, 0, %d)", text, currentUser, topicid);
+		db.exec("INSERT INTO message (contents, creatorid, parentid, topicid) VALUES (%Q, %d, 0, %d)", text, currentUser, topicid);
 		auto msgid = db.last_rowid();
 
 		time_t t;
 		time(&t);
 		//long d = 12345;
-		db.exec("UPDATE msggroup SET lastpost=%d WHERE ROWID=%d", t, currentGroup);
-		db.exec("UPDATE msgtopic SET lastpost=%d WHERE ROWID=%d", t, topicid);
+		db.exec("UPDATE msggroup SET lastpost=%d,lastby=%d WHERE ROWID=%d", t, currentUser,currentGroup);
+		db.exec("UPDATE msgtopic SET lastpost=%d,lastby=%d WHERE ROWID=%d", t, currentUser, topicid);
 		db.exec("INSERT INTO readmsg (userid, msgid) VALUES (%d,%d)", currentUser, msgid);
 		//db.exec("INSERT INTO groupstate (userid, groupid) VALUES (%d, %d)", currentUser, currentGroup);
 		//db.exec("INSERT INTO topicstate (userid, topicid) VALUES (%d, %d)", currentUser, currentGroup);
@@ -246,21 +182,28 @@ LoginManager loginManager;
 class ComBoard {
 public:
 	ComBoard(MessageBoard &board, Console &console) : board(board), console(console), 
-		commands { 
+		commands { 			
 			{ "list groups", [&](const std::vector<std::string> &args) { 
 				LOGD("List groups");
 				for(const auto &g : board.list_groups()) {
-					console.write(format("%s\n", g.name));
+					time_t tt = (time_t)g.last_post;
+					const char *t = ctime(&tt);
+					console.write(format("%s [Created by %d] LAST POST: %s\n", g.name, g.creator, t));
 				}
 			} },
 			{ "list topics", [&](const std::vector<std::string> &args) { 
 				LOGD("List topics");
 				for(const auto &t : board.list_topics()) {
-					console.write(format("%s\n", t.name));
+					console.write(format("%s (%s)\n", t.name, t.starter));
 				}
 			} },
-			{ "list groups", [&](const std::vector<std::string> &args) { 
-				LOGD("List groups"); 
+			{ "next group", [&](const std::vector<std::string> &args) { 
+				for(const auto &g : board.list_groups()) {
+					time_t tt = (time_t)g.last_post;
+					const char *t = ctime(&tt);
+					console.write(format("%s [Created by %d] LAST POST: %s\n", g.name, g.creator, t));
+				}
+
 			} },
 			{ "create group", [&](const std::vector<std::string> &args) {
 				auto g = board.create_group(args[2]);
@@ -327,9 +270,9 @@ post
 int main(int argc, char **argv) {
 
 	db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
-	db.exec("CREATE TABLE IF NOT EXISTS msggroup (name TEXT, creatorid INT, lastpost INT, FOREIGN KEY(creatorid) REFERENCES bbsuser(ROWID))");
-	db.exec("CREATE TABLE IF NOT EXISTS msgtopic (name TEXT, userid INT, groupid INT, lastpost INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(groupid) REFERENCES msggroup(ROWID))");
-	db.exec("CREATE TABLE IF NOT EXISTS message (contents TEXT, userid INT, parentid INT, topicid INT, timestamp INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
+	db.exec("CREATE TABLE IF NOT EXISTS msggroup (name TEXT, creatorid INT, lastpost INT, lastby INT, FOREIGN KEY(creatorid) REFERENCES bbsuser(ROWID), FOREIGN KEY(lastby) REFERENCES bbsuser(ROWID))");
+	db.exec("CREATE TABLE IF NOT EXISTS msgtopic (name TEXT, creatorid INT, groupid INT, lastpost INT, lastby INT, FOREIGN KEY(creatorid) REFERENCES bbsuser(ROWID), FOREIGN KEY(groupid) REFERENCES msggroup(ROWID), FOREIGN KEY(lastby) REFERENCES bbsuser(ROWID))");
+	db.exec("CREATE TABLE IF NOT EXISTS message (contents TEXT, creatorid INT, parentid INT, topicid INT, timestamp INT, FOREIGN KEY(creatorid) REFERENCES bbsuser(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
 
 	db.exec("CREATE TABLE IF NOT EXISTS groupstate (userid INT, groupid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(groupid) REFERENCES msggroup(ROWID))");
 	db.exec("CREATE TABLE IF NOT EXISTS topicstate (userid INT, topicid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
