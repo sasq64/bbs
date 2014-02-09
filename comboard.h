@@ -1,3 +1,8 @@
+#ifndef COMBOARD_H
+#define COMBOARD_H
+
+#include "messageboard.h"
+#include <bbsutils/console.h>
 
 class ComBoard {
 public:
@@ -16,3 +21,5 @@ private:
 	bbs::Console &console;
 	std::vector<Command> commands;
 };
+
+#endif // COMBOARD_H

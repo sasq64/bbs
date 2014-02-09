@@ -65,6 +65,8 @@ int main(int argc, char **argv) {
 	//loginManager.add_user("sasq", "password");
 	//loginManager.add_user("jonas", "secret");
 	//db.get_user("sasq");
+	vector<uint8_t> v;
+	format("%x", v);
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {

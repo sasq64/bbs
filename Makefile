@@ -4,7 +4,6 @@ include $(MODULE_DIR)/config.mk
 OBJDIR := obj/
 CFLAGS := -g -Wall -I$(MODULE_DIR)
 CXXFLAGS := -std=c++0x
-LIBS += -ldl
 
 include $(MODULE_DIR)/coreutils/module.mk
 include $(MODULE_DIR)/bbsutils/module.mk

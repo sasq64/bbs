@@ -12,11 +12,12 @@ public:
 	MessageBoard(sqlite3db::Database &db) : db(db) {}
 
 	struct Group {
-		Group(uint64_t id, const std::string &n, uint64_t lp = 0,  std::string c = "") : id(id), name(n), last_post(lp), creator(c) {}
+		Group(uint64_t id, const std::string &n, uint64_t lp = 0,  std::string c = "", uint64_t lr = 0) : id(id), name(n), last_post(lp), creator(c), last_read(lr) {}
 		const uint64_t id;
 		const std::string name;
 		const uint64_t last_post;
 		const  std::string creator;
+		const uint64_t last_read;
 	};
 
 	struct Topic {

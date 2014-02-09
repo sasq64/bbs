@@ -13,11 +13,12 @@ uint64_t MessageBoard::create_group(const std::string &name) {
 	db.exec("INSERT INTO msggroup (name, creatorid, lastpost) VALUES (%Q, %d, 0)", name, currentUser);
 	return db.last_rowid();
 }
+
 const std::vector<MessageBoard::Group> MessageBoard::list_groups() {
 	vector<MessageBoard::Group> groups;
-	db.execf("SELECT msggroup.ROWID, msggroup.name, msggroup.lastpost, bbsuser.handle FROM msggroup,bbsuser WHERE msggroup.creatorid=bbsuser.ROWID", [&](int i, const vector<string> &result) {
-		groups.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), result[3]);
-	});
+	db.execf("SELECT msggroup.ROWID,msggroup.name,msggroup.lastpost,bbsuser.handle FROM msggroup,bbsuser WHERE msggroup.creatorid=bbsuser.ROWID", [&](int i, const vector<string> &result) {
+		groups.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), result[3], std::stol(result[4]));
+	}, currentUser);
 	return groups; // NOTE: std::move ?
 }
 
@@ -33,7 +34,7 @@ uint64_t MessageBoard::enter_group(const std::string &group_name) {
 	if(id != 0) {
 		currentGroup = id;
 		uint64_t lastread;
-		bool unread = true;
+		//bool unread = true;
 		if(db.select_first(lastread, "SELECT lastread FROM groupstate WHERE userid=%d", currentUser)) {
 			LOGD("Last read %d", lastread);
 		}
@@ -78,6 +79,7 @@ uint64_t MessageBoard::post(const std::string &topic_name, const std::string &te
 	ta.commit();
 	return msgid;
 }
+
 uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 	uint64_t topicid;
 	db.execf("SELECT topicid FROM message WHERE ROWID=%d", [&](int i, const vector<string> &result) {
