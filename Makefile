@@ -11,7 +11,12 @@ include $(MODULE_DIR)/crypto/module.mk
 include $(MODULE_DIR)/sqlite3/module.mk
 
 TARGET := bbs
-LOCAL_FILES += bbs.cpp loginmanager.cpp messageboard.cpp comboard.cpp
+LOCAL_FILES += loginmanager.cpp messageboard.cpp comboard.cpp
+#bbs.cpp 
+
+CFLAGS += -DMY_UNIT_TEST
+TARGET := test
+LOCAL_FILES += catch.cpp
 
 CC=ccache clang -Qunused-arguments
 CXX=ccache clang++ -Qunused-arguments
