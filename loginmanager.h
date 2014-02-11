@@ -14,9 +14,12 @@ public:
 	};
 
 	static const uint64_t NO_USER = 0;
-	LoginManager(sqlite3db::Database &db) : db(db) {}
+	LoginManager(sqlite3db::Database &db) : db(db) {
+		db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
+	}
 	uint64_t verify_user(const std::string &handle, const std::string &password);
-	uint64_t get_user(const std::string &handle);
+	uint64_t get_id(const std::string &handle);
+	std::string get(uint64_t id);
 	uint64_t add_user(const std::string &handle, const std::string &password);
 private:
 	sqlite3db::Database &db;

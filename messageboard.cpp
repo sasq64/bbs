@@ -13,11 +13,12 @@ MessageBoard::MessageBoard(sqlite3db::Database &db, uint64_t userId) : db(db), c
 	db.exec("CREATE TABLE IF NOT EXISTS msgtopic (name TEXT, creatorid INT, groupid INT, firstmsg INT, FOREIGN KEY(groupid) REFERENCES msggroup(ROWID), FOREIGN KEY(firstmsg) REFERENCES message(ROWID))");
 	db.exec("CREATE TABLE IF NOT EXISTS message (contents TEXT, creatorid INT, parentid INT, topicid INT, timestamp INT, FOREIGN KEY(parentid) REFERENCES message(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
 
+	LOGD("User %d on board", userId);
+
 	File mfile { format("msgbits.%d", userId) };
 	if(mfile.exists()) {
 		msgbits.set(mfile.getPtr(), mfile.getSize());
 	}
-	mark_read(0);
 }
 
 uint64_t MessageBoard::create_group(const std::string &name) {
@@ -65,18 +66,28 @@ const std::vector<MessageBoard::Topic> MessageBoard::list_topics() {
 
 const std::vector<MessageBoard::Message> MessageBoard::list_messages(uint64_t topic_id) {
 	vector<MessageBoard::Message> messages;
-	db.execf("SELECT ROWID,contents,creatorid FROM msgtopic WHERE topicid=%d", [&](int i, const vector<string> &result) {
+	db.execf("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE topicid=%d", [&](int i, const vector<string> &result) {
 		LOGD(result[1]);
-		messages.emplace_back(std::stol(result[0]), result[1]);
+		//messages.emplace_back(std::stol(result[0]), result[1]);
+		messages.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), std::stol(result[3]), std::stol(result[4]), std::stol(result[5]));
 	}, topic_id);
+	return messages; // NOTE: std::move ?		
+}
+
+vector<MessageBoard::Message> MessageBoard::get_replies(uint64_t id) {
+	vector<MessageBoard::Message> messages;
+	db.execf("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE parentid=%d", [&](int i, const vector<string> &result) {
+		messages.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), std::stol(result[3]), std::stol(result[4]), std::stol(result[5]));
+	}, id);
 	return messages; // NOTE: std::move ?		
 }
 
 uint64_t MessageBoard::post(const std::string &topic_name, const std::string &text) {
 	auto ta = db.transaction();
+	uint64_t ts = 12345;
 	db.exec("INSERT INTO msgtopic (name,creatorid,groupid) VALUES (%Q, %d, %d)", topic_name, currentUser, currentGroup);
 	auto topicid = db.last_rowid();
-	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid) VALUES (%Q, %d, 0, %d)", text, currentUser, topicid);
+	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (%Q, %d, 0, %d, %d)", text, currentUser, topicid, ts);
 	auto msgid = db.last_rowid();
 	db.exec("UPDATE msgtopic SET firstmsg=%d WHERE ROWID=%d", msgid, topicid);
 
@@ -100,8 +111,8 @@ uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 		topicid = std::stol(result[0]);
 	}, msgid);
 	if(topicid == 0) throw msgboard_exception("Repy failed, no such topic");
-
-	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid) VALUES (%Q, %d, %d, %d)", text, currentUser, msgid, topicid);
+	uint64_t ts = 12345;
+	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (%Q, %d, %d, %d, %d)", text, currentUser, msgid, topicid, ts);
 
 	msgid = db.last_rowid();
 	mark_read(msgid);
@@ -130,7 +141,7 @@ MessageBoard::Topic MessageBoard::get_topic(uint64_t id) {
 
 MessageBoard::Group MessageBoard::get_group(uint64_t id) {
 	Group group;
-	db.execf("SELECT ROWID,name, FROM msggroup WHERE ROWID=%d", [&](int i, const vector<string> &result) {
+	db.execf("SELECT ROWID,name FROM msggroup WHERE ROWID=%d", [&](int i, const vector<string> &result) {
 		group = Group(std::stol(result[0]), result[1]);
 	}, id);
 	if(group.id == 0) throw msgboard_exception("No such group");
@@ -178,15 +189,20 @@ TEST_CASE("msgboard", "Messageboard test") {
 	auto msgid = mb2.get_first_unread_msg();
 	LOGD("ID %d", msgid);
 	auto msg = mb2.get_message(msgid);
-/*
+	auto topic = mb2.get_topic(msg.topic);
 	REQUIRE(msgid == 1);
+	REQUIRE(topic.name == "First post");
+	mb2.mark_read(1);
+	REQUIRE(mb2.get_first_unread_msg() == 2);
+	mb2.mark_read(2);
+	REQUIRE(mb2.get_first_unread_msg() == 3);
 
 	msgid = mb.get_first_unread_msg();
-
-	REQUIRE(msgid == 3);
-
+	REQUIRE(msgid == 4);
 	mb.reply(msgid, "Hello to you too!");
-*/
+
+	mb2.mark_read(3);
+	REQUIRE(mb2.get_first_unread_msg() == 5);
 
 }
 

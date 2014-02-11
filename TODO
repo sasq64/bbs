@@ -1,0 +1,17 @@
+
+
+* Line by line editor
+* Read only part in FullEditor for viewing commented text
+
+* Better CL matching (arg specifiers, no empty or short matches, show ambiguity)
+
+* Timestamps
+* Skip topic
+* Skip thread
+
+* Undo read 'unread'
+
+* Auto prompt
+
+* Save/restore readbits
+

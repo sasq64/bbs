@@ -1,8 +1,10 @@
 #ifndef COMBOARD_H
 #define COMBOARD_H
 
+#include "loginmanager.h"
 #include "messageboard.h"
 #include <bbsutils/console.h>
+#include <map>
 
 class ComBoard {
 public:
@@ -14,19 +16,24 @@ public:
 		const std::vector<std::string> text;
 	};
 
-	ComBoard(MessageBoard &board, bbs::Console &console);
+	ComBoard(LoginManager &lm, MessageBoard &board, bbs::Console &console);
 	void exec(const std::string &line);
 private:
 
 	uint64_t find_first_unread(uint64_t msg_id);
 	void select_topic(uint64_t topic_id);
+	std::string edit();
+	void show_message(const MessageBoard::Message &msg);
 
+
+	LoginManager users;
 	MessageBoard &board;
 	bbs::Console &console;
 	std::vector<Command> commands;
 	MessageBoard::Message currentMsg;
+	MessageBoard::Message lastShown;
 	MessageBoard::Topic currentTopic;
-	std::unordered_map<uint64_t, MessageBoard::Message> topicMap;
+	std::map<uint64_t, MessageBoard::Message> topicMap;
 };
 
 #endif // COMBOARD_H

@@ -56,9 +56,13 @@ TEST_CASE("utils::format", "format operations") {
 
 int main(int argc, char **argv) {
 
+	//uint64_t x = 0x1201f;
+	//LOGD("%x %d", ~x, __builtin_ctzl(~x));
+	//return 0;
+
 	sqlite3db::Database db { "bbs.db" };
 
-	db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
+	//db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
 
 	//db.exec("CREATE TABLE IF NOT EXISTS groupstate (userid INT, groupid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(groupid) REFERENCES msggroup(ROWID))");
 	//db.exec("CREATE TABLE IF NOT EXISTS topicstate (userid INT, topicid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
@@ -66,7 +70,7 @@ int main(int argc, char **argv) {
 
 	LoginManager loginManager(db);
 
-	if(loginManager.get_user("admin") == LoginManager::NO_USER) {
+	if(loginManager.get_id("admin") == LoginManager::NO_USER) {
 		loginManager.add_user("admin", "password");
 
 		//board.login(1);
@@ -99,27 +103,29 @@ int main(int argc, char **argv) {
 			}
 			Console &console = *con;
 
-			MessageBoard board(db, 1);
-			ComBoard comboard(board, console);
-
 			auto h = session.getHeight();
 			auto w = session.getWidth();
 			LOGD("New connection, TERMTYPE '%s' SIZE %dx%d", termType, w, h);
 			console.flush();
 			console.clear();
 			int tries = 2;
+			uint64_t userId = 0;
 			while(true) {
-				break;
+				//break;
 				auto l = console.getLine("LOGON:");
 				auto p = console.getLine("PASSWORD:");
-				auto id = loginManager.verify_user(l, p);
-				if(id != LoginManager::NO_USER)
+				userId = loginManager.verify_user(l, p);
+				if(userId != LoginManager::NO_USER)
 					break;
 				if(tries == 0)
 					session.disconnect();
 				else
 					tries--;
 			}
+
+			MessageBoard board(db, userId);
+			ComBoard comboard(loginManager, board, console);
+
 			console.clear();
 			console.moveCursor(0,0);
 

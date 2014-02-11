@@ -56,16 +56,36 @@ public:
 	Group get_group(uint64_t groupid);
 
 	uint64_t get_first_unread_msg() {
-		return msgbits.lowest_unset();
+		return msgbits.lowest_unset()+1;
 	}
 
-	bool is_read(int pos) {
-		return msgbits.get(pos);
+	uint64_t first_msg() {
+		return 1;
 	}
-	void mark_read(int pos) {
-		LOGD("Msg %d read", pos);
-		msgbits.set(pos, true);
+
+	uint64_t last_msg() {
+		uint64_t maxm = 1;
+		db.execf("SELECT MAX(ROWID) FROM message", [&](int i, const std::vector<std::string> &result) {
+			maxm = std::stol(result[0]);
+		});
+		return maxm+1;
 	}
+
+	bool is_read(int msgid) {
+		return msgbits.get(msgid-1);
+	}
+	void mark_read(int msgid) {
+		if(msgid < 1)
+			throw msgboard_exception("Illegal msgid");
+		LOGD("Msg %d read", msgid);
+		msgbits.set(msgid-1, true);
+	}
+
+	Group current_group() {
+		return get_group(currentGroup);
+	}
+
+	std::vector<Message> get_replies(uint64_t id);
 
 	uint64_t create_group(const std::string &name);
 	const std::vector<Group> list_groups();

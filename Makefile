@@ -12,11 +12,11 @@ include $(MODULE_DIR)/sqlite3/module.mk
 
 TARGET := bbs
 LOCAL_FILES += loginmanager.cpp messageboard.cpp comboard.cpp
-#bbs.cpp 
+LOCAL_FILES += bbs.cpp 
 
-CFLAGS += -DMY_UNIT_TEST
-TARGET := test
-LOCAL_FILES += catch.cpp
+#CFLAGS += -DMY_UNIT_TEST
+#TARGET := test
+#LOCAL_FILES += catch.cpp
 
 CC=ccache clang -Qunused-arguments
 CXX=ccache clang++ -Qunused-arguments
