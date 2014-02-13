@@ -54,9 +54,15 @@ public:
 	Message get_message(uint64_t msgid);
 	Topic get_topic(uint64_t topicid);
 	Group get_group(uint64_t groupid);
+	Group get_group(const std::string &name);
+
+	void flush_bits();
 
 	uint64_t get_first_unread_msg() {
-		return msgbits.lowest_unset()+1;
+		uint64_t mid = msgbits.lowest_unset()+1;
+		if(mid >= last_msg())
+			return 0;
+		return mid;
 	}
 
 	uint64_t first_msg() {
@@ -64,10 +70,12 @@ public:
 	}
 
 	uint64_t last_msg() {
-		uint64_t maxm = 1;
+		uint64_t maxm = -1;
 		db.execf("SELECT MAX(ROWID) FROM message", [&](int i, const std::vector<std::string> &result) {
-			maxm = std::stol(result[0]);
+			if(result[0] != "")
+				maxm = std::stol(result[0]);
 		});
+		LOGD("LAST MSG %d", maxm);
 		return maxm+1;
 	}
 

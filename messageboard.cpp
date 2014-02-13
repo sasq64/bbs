@@ -12,13 +12,26 @@ MessageBoard::MessageBoard(sqlite3db::Database &db, uint64_t userId) : db(db), c
 	db.exec("CREATE TABLE IF NOT EXISTS msggroup (name TEXT, creatorid INT)");
 	db.exec("CREATE TABLE IF NOT EXISTS msgtopic (name TEXT, creatorid INT, groupid INT, firstmsg INT, FOREIGN KEY(groupid) REFERENCES msggroup(ROWID), FOREIGN KEY(firstmsg) REFERENCES message(ROWID))");
 	db.exec("CREATE TABLE IF NOT EXISTS message (contents TEXT, creatorid INT, parentid INT, topicid INT, timestamp INT, FOREIGN KEY(parentid) REFERENCES message(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
+	db.exec("CREATE TABLE IF NOT EXISTS msgbits (user INT, bits BLOB, PRIMARY KEY(user))");
 
 	LOGD("User %d on board", userId);
 
-	File mfile { format("msgbits.%d", userId) };
-	if(mfile.exists()) {
-		msgbits.set(mfile.getPtr(), mfile.getSize());
-	}
+	auto lm = last_msg();
+	msgbits.grow(lm);
+	db.get_blob(format("SELECT bits FROM msgbits WHERE user=%d", userId), 0, msgbits.get_vector());
+
+	//File mfile { format("msgbits.%d", userId) };
+	//if(mfile.exists()) {
+	//	msgbits.set(mfile.getPtr(), mfile.getSize()*8);
+	//}
+}
+
+void MessageBoard::flush_bits() {
+	//File mfile { format("msgbits.%d", currentUser) };
+	//mfile.write((const uint8_t*)msgbits.get(), msgbits.size()*8);
+	//mfile.close();
+	msgbits.grow(1);
+	db.put_blob(format("INSERT OR REPLACE INTO msgbits(user,bits) VALUES (%d,?)", currentUser), 1, msgbits.get_vector());
 }
 
 uint64_t MessageBoard::create_group(const std::string &name) {
@@ -85,6 +98,10 @@ vector<MessageBoard::Message> MessageBoard::get_replies(uint64_t id) {
 uint64_t MessageBoard::post(const std::string &topic_name, const std::string &text) {
 	auto ta = db.transaction();
 	uint64_t ts = 12345;
+
+	if(currentGroup < 1)
+		throw msgboard_exception("No current group");
+
 	db.exec("INSERT INTO msgtopic (name,creatorid,groupid) VALUES (%Q, %d, %d)", topic_name, currentUser, currentGroup);
 	auto topicid = db.last_rowid();
 	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (%Q, %d, 0, %d, %d)", text, currentUser, topicid, ts);
@@ -106,6 +123,7 @@ uint64_t MessageBoard::post(const std::string &topic_name, const std::string &te
 }
 
 uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
+
 	uint64_t topicid = 0;
 	db.execf("SELECT topicid FROM message WHERE ROWID=%d", [&](int i, const vector<string> &result) {
 		topicid = std::stol(result[0]);
@@ -119,7 +137,6 @@ uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 
 	return msgid;		
 }
-
 
 MessageBoard::Message MessageBoard::get_message(uint64_t msgid) {
 	Message msg;
@@ -144,6 +161,15 @@ MessageBoard::Group MessageBoard::get_group(uint64_t id) {
 	db.execf("SELECT ROWID,name FROM msggroup WHERE ROWID=%d", [&](int i, const vector<string> &result) {
 		group = Group(std::stol(result[0]), result[1]);
 	}, id);
+	if(group.id == 0) throw msgboard_exception("No such group");
+	return group;
+};
+
+MessageBoard::Group MessageBoard::get_group(const std::string &name) {
+	Group group;
+	db.execf("SELECT ROWID,name FROM msggroup WHERE name=%Q", [&](int i, const vector<string> &result) {
+		group = Group(std::stol(result[0]), result[1]);
+	}, name);
 	if(group.id == 0) throw msgboard_exception("No such group");
 	return group;
 };

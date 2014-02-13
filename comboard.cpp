@@ -15,20 +15,41 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			for(const auto &g : board.list_groups()) {
 				//time_t tt = (time_t)g.last_post;
 				//const char *t = ctime(&tt);
-				console.write(format("%s [Created by %s] LAST POST: %d\n", g.name, users.get(g.creator), 0));
+				write("~2%s ~3Created by %s ~0LAST POST: %d\n", g.name, users.get(g.creator), 0);
 			}
 		} },
 
-		{ "list topics", [&](const vector<string> &args) { 
+		{ "flush", [&](const vector<string> &args) { 
+			board.flush_bits();
+		} },
+
+		{ "logout", [&](const vector<string> &args) { 
+		} },
+		{ "quit", [&](const vector<string> &args) { 
+		} },
+
+		{ "list users", [&](const vector<string> &args) { 
+			auto ulist = users.list_users();
+			for(auto &u : ulist)
+				write("%s\n", u);
+		} },
+
+		{ "who", [&](const vector<string> &args) { 
+			auto ulist = users.list_logged_in();
+			for(auto &u : ulist)
+				write("%s\n", u);
+		} },
+
+		{ "list topics", "List all topics in the current group", [&](const vector<string> &args) { 
 			LOGD("List topics");
 			auto group = board.current_group();
-			console.write("Topics in group '%s'", group.name);
+			write("Topics in group '%s'", group.name);
 			for(const auto &t : board.list_topics()) {
-				console.write(format("%s (%d)\n", t.name, users.get(t.creator)));
+				write(format("%s (%d)\n", t.name, users.get(t.creator)));
 			}
 		} },
 
-		{ "list unread", [&](const vector<string> &args) { 
+		{ "list unread", "List all unread messages", [&](const vector<string> &args) { 
 			auto start = board.first_msg();
 			auto end = board.last_msg();
 			for(auto i = start; i < end; i++) {
@@ -36,33 +57,36 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 					auto msg = board.get_message(i);
 					auto topic = board.get_topic(msg.topic);
 					auto group = board.get_group(topic.group);
-					console.write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
+					write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
 				}
 			}
 		} },
 
-		{ "list all", [&](const vector<string> &args) { 
+		{ "list all", "List all messages", [&](const vector<string> &args) { 
 			auto start = board.first_msg();
 			auto end = board.last_msg();
 			for(auto i = start; i < end; i++) {
 				auto msg = board.get_message(i);
 				auto topic = board.get_topic(msg.topic);
 				auto group = board.get_group(topic.group);
-				console.write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
+				write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
 			}
 		} },
 
-		{ "next topic", [&](const vector<string> &args) {
+		{ "next topic", "Go to next unread topic", [&](const vector<string> &args) {
+
+			board.flush_bits();
+			LOGD("First unread");
 			auto msgid = board.get_first_unread_msg();
 			if(msgid < 1) {
-				console.write("No more topics\n");
+				write("No more topics\n");
 				return;
 			}
 			LOGD("unread %d", msgid);
 			auto msg = board.get_message(msgid);
 			auto topic = board.get_topic(msg.topic);
 			auto group = board.get_group(topic.group);
-			console.write("Group '%s' topic '%s'\n", group.name, topic.name);
+			write("Group '%s' topic '%s'\n", group.name, topic.name);
 			board.enter_group(group.id);
 			select_topic(topic.id);
 			//currentMsgThread = board.get_thread(topic.first_msgid);
@@ -72,9 +96,9 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			lastShown.id = 0;
 		} },
 
-		{ "read next", [&](const vector<string> &args) {
+		{ "read next", "Read next unread message in current topic", [&](const vector<string> &args) {
 			if(currentMsg.id == 0)
-				console.write("No more messages\n");
+				write("No more messages\n");
 			else {
 				show_message(currentMsg);
 				board.mark_read(currentMsg.id);
@@ -89,75 +113,110 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 
 		} },
 
-		{ "read", [&](const vector<string> &args) {
-			uint64_t mid = std::stol(args[1]);
-			auto msg = board.get_message(mid);
-			show_message(msg);
-			lastShown = msg;
-			board.mark_read(mid);
+		{ "read", "Read specific message", "!m", [&](const vector<string> &args) {
+			try {
+				uint64_t mid = std::stol(args[0]);
+				auto msg = board.get_message(mid);
+				show_message(msg);
+				lastShown = msg;
+				board.mark_read(mid);
+			} catch (invalid_argument &e) {
+			}
 		} },
 
-		{ "create group", [&](const vector<string> &args) {
-			auto g = board.create_group(args[2]);
+		{ "create group", "Create a new group", "!s", [&](const vector<string> &args) {
+			auto g = board.create_group(args[0]);
 			if(g == 0)
-				console.write("Create group failed\n");
+				write("Create group failed\n");
 			else
-				console.write(format("Group '%s' created\n", args[2]));
+				write(format("Group '%s' created\n", args[0]));
 		} },
 
-		{ "create user", [&](const vector<string> &args) {
-			if(args.size() != 4) {
-				console.write("Usage: create user [handle] [password]\n");
+		{ "create user", "Create a new user", "!s!s", [&](const vector<string> &args) {
+			if(args.size() != 2) {
+				write("Usage: create user [handle] [password]\n");
 				return;
 			}
-			auto id = users.add_user(args[2], args[3]);
+			auto id = users.add_user(args[0], args[1]);
 			if(id == 0)
-				console.write("Create user failed\n");
+				write("Create user failed\n");
 			else
-				console.write(format("User '%s' created\n", args[2]));
+				write(format("User '%s' created\n", args[0]));
 		} },
 
-		{ "enter group", [&](const vector<string> &args) {
-			auto g = board.enter_group(args[2]);
+		{ "enter group", "Enter a specific group", "!g", [&](const vector<string> &args) {
+			auto g = board.enter_group(args[0]);
 			if(g == 0)
-				console.write("No such group\n");
+				write("No such group\n");
 			else {
 				lastShown.id = 0;
 			}
 		} },
 
-		{ "post", [&](const vector<string> &args) { 
-			//LOGD("List groups"); 
-			auto topic = console.getLine("TOPIC:");
-			auto text = edit();
+		{ "post", "Post a new topic", "?s?s", [&](const vector<string> &args) { 
+			//LOGD("List groups");
+			auto group = board.current_group();
+			if(group.id < 1) {
+				write("You need to enter a group first");
+				return;
+			}
+
+			auto topic = args.size() > 0 ? args[0] : console.getLine("TOPIC:");
+			auto text = args.size() > 1 ? args[1] : edit();
 			board.post(topic, text);
 			lastShown.id = 0;
 		} },
 
-		{ "reply", [&](const vector<string> &args) { 
+		{ "reply", "Reply to a message", "?m", [&](const vector<string> &args) { 
 			//LOGD("List groups"); 
 			auto mid = lastShown.id;
-			if(args.size() > 1)
-				mid = std::stol(args[1]);
+			if(args.size() == 1)
+				mid = std::stol(args[0]);
 			if(mid > 0) {
 				auto text = edit();
 				board.reply(mid, text);
 			} else
-				console.write("Reply failed\n");
+				write("Reply failed\n");
 			lastShown.id = 0;	
 		} },
 	}
 {}
+/*
+	enum Color {
+	0	WHITE,
+	1	RED,
+	2	GREEN,
+	3	BLUE,
+	4	ORANGE,
+	5	BLACK,
+	6	BROWN,
+	7	PINK,
+	8	DARK_GREY,
+	9	GREY,
+	a	LIGHT_GREEN,
+	b	LIGHT_BLUE,
+	c	LIGHT_GREY,
+	d	PURPLE,
+	e	YELLOW,
+	f	CYAN,
+	};
+*/
 
 void ComBoard::show_message(const MessageBoard::Message &msg) {
 	auto topic = board.get_topic(msg.topic);
-	console.write(format("Msg #%d by %s [%s%s]\n%s\n", msg.id, users.get(msg.creator), msg.parent == 0 ? "" : "Re:", topic.name, msg.text));
 	auto replies = board.get_replies(msg.id);
-	for(const auto &r : replies) {
-		console.write("Reply #%d by %s\n", r.id, users.get(r.creator));
-	}
+	string s = "no replies";
+	if(replies.size() == 1)
+		s = "1 reply";
+	else
+		s = format("%d replies", replies.size());
+	write(format("~0Msg #%d ~f%s%s~c\n%s~0\nby %s. %s\n", msg.id, msg.parent == 0 ? "" : "Re:", topic.name, msg.text, users.get(msg.creator), s));
 
-	//console.write(currentMsg.text);
+	//for(const auto &r : replies) {
+	//	write("~9Reply #%d by ~8%s~0\n", r.id, users.get(r.creator));
+	//}
+
+	//write(currentMsg.text);
 }
 
 string ComBoard::edit() {
@@ -168,8 +227,21 @@ string ComBoard::edit() {
 			break;
 		}
 	}
-	return ed.getResult();
+	string r = rstrip(ed.getResult(), '\n');
+	return r;
 }
+
+string ComBoard::suggested_command() {
+	if(currentMsg.id == 0) {
+		auto msgid = board.get_first_unread_msg();
+		if(msgid < 1) {
+			return "status";
+		}
+		return "next topic";
+	} else
+		return "read next";
+
+};
 
 // Find first unread message in the thread rooted at msg_id
 uint64_t ComBoard::find_first_unread(uint64_t msg_id) {
@@ -196,25 +268,112 @@ void ComBoard::select_topic(uint64_t topic_id) {
 	}
 }
 
+template <class... A> void ComBoard::write(const std::string &text, const A& ... args) {
+	string f = format(text, args...);
+	auto parts = split(f, "~", true);
+	bool first = true;
+	for(auto s : parts) {
+		if(!first) {
+			char c = 0;
+			if(s[0] <= '9')
+				c = s[0] - '0';
+			else
+				c = s[0] - 'a' + 10;
+			console.setColor(c);
+			s = s.substr(1);
+		}
+		first = false;
+		console.write(s);
+	}
+}
 
-void ComBoard::exec(const string &line) {
+bool ComBoard::exec(const string &line) {
 	auto parts = split(line);
 	if(parts.size() < 1)
-		return;
+		return true;
 
-	for(const auto &c : commands) {
+	vector<Command*> foundCommands;
+	int largestMatch = 0;
+	for(auto &c : commands) {
 		bool found = true;
+		if(parts.size() < c.text.size()) {
+			continue;
+		}
 		for(int i=0; i<c.text.size(); i++) {
 			if(c.text[i].compare(0, parts[i].length(), parts[i]) != 0) {
 				found = false;
 				break;
 			}
 		}
+
 		if(found) {
-			c.func(parts);
-			break;
+			if(c.text.size() >= largestMatch) {
+				if(c.text.size() > largestMatch) {
+					LOGD("clearing previous, longer");
+					largestMatch = c.text.size();
+					foundCommands.clear();
+				}
+				LOGD("Adding %s", c.full_text);
+				foundCommands.push_back(&c);
+			}
 		}
 	}
+
+	if(foundCommands.size() == 1) {
+		auto &c = *(foundCommands[0]);
+		LOGD("Matched '%s'", c.full_text);
+		//int acount = parts.size() - c.text.size();
+		parts.erase(parts.begin(), parts.begin() + c.text.size());
+		bool ok = true;
+		int i = 0;
+		LOGD("We have %d args", parts.size());
+		for(auto &a : c.args) {
+			LOGD("%d %d", (int)a.argtype, i);
+			if(i == parts.size()) {
+				write("Too few arguments\n");
+				ok = false;
+				break;
+			}
+			if(a.argtype == Command::MESSAGE) {
+				try {
+					auto mid = std::stol(parts[i]);
+					auto msg = board.get_message(mid);
+				} catch (msgboard_exception &e) {
+					write("No such message\n");
+					ok = false;
+				} catch (invalid_argument &e) {
+					write("You need to provide a message number\n");
+					ok = false;
+				}
+			} else if(a.argtype == Command::GROUP) {
+				try {
+					auto group = board.get_group(parts[i]);
+				} catch (msgboard_exception &e) {
+					write("No such group\n");
+					ok = false;
+				}
+			}
+			if(!ok) break;
+			i++;
+		}
+		if(i > parts.size()) {
+			write("Too many arguments\n");
+			ok = false;
+		}
+		if(ok) {
+			c.func(parts);
+			if(c.full_text == "logout" || c.full_text == "quit")
+				return false;
+		}
+	} else if(foundCommands.size() > 1) {
+		write("Ambigous command:\n");
+		for(auto *c : foundCommands) {
+			write(c->full_text + "\n");
+		}
+	} else {
+		console.write("Unknown command\n");
+	}
+	return true;
 }
 
 #ifdef MY_UNIT_TEST

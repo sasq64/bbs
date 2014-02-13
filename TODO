@@ -1,4 +1,5 @@
 
+* Thread locking!
 
 * Line by line editor
 * Read only part in FullEditor for viewing commented text
@@ -15,3 +16,8 @@
 
 * Save/restore readbits
 
+* UP/DOWN history
+
+BUGS
+
+* Scrolling when Y >= HEIGHT causes infinte loop

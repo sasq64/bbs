@@ -91,6 +91,7 @@ int main(int argc, char **argv) {
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
+		uint64_t userId = 0;
 		try {
 			session.echo(false);
 			auto termType = session.getTermType();
@@ -109,12 +110,11 @@ int main(int argc, char **argv) {
 			console.flush();
 			console.clear();
 			int tries = 2;
-			uint64_t userId = 0;
 			while(true) {
 				//break;
 				auto l = console.getLine("LOGON:");
 				auto p = console.getLine("PASSWORD:");
-				userId = loginManager.verify_user(l, p);
+				userId = loginManager.login_user(l, p);
 				if(userId != LoginManager::NO_USER)
 					break;
 				if(tries == 0)
@@ -130,10 +130,16 @@ int main(int argc, char **argv) {
 			console.moveCursor(0,0);
 
 			while(true) {
-				console.write(">");
+				auto sc = comboard.suggested_command();
+				comboard.write("\n~0(~8%s~0) # ", sc);
 				auto line = console.getLine();
+				if(line == "")
+					line = sc;
 				console.write("\n");
-				comboard.exec(line);
+				if(!comboard.exec(line)) {
+					loginManager.logout_user(userId);
+					session.disconnect();
+				}
 			}
 
 			/*
@@ -154,6 +160,7 @@ int main(int argc, char **argv) {
 		
 		} catch (TelnetServer::disconnect_excpetion &e) {
 			LOGD("Client disconnected");
+			loginManager.logout_user(userId);
 			//addChatLine(user.name() + " disconnected");
 			//{ lock_guard<mutex> guard(chatLock);
 			//	users.erase(user);
