@@ -13,7 +13,8 @@ include $(MODULE_DIR)/sqlite3/module.mk
 TARGET := bbs
 LOCAL_FILES += loginmanager.cpp messageboard.cpp comboard.cpp
 LOCAL_FILES += bbs.cpp 
-
+LIBS += -lbfd
+LDFLAGS += -g
 #CFLAGS += -DMY_UNIT_TEST
 #TARGET := test
 #LOCAL_FILES += catch.cpp

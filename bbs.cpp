@@ -21,16 +21,11 @@ using namespace bbs;
 using namespace utils;
 using namespace std;
 
-
-
-
-/*
-next group
-read next
-comment/reply
-post
-*/
-
+#define BACKWARD_HAS_BFD 1
+#include "backward-cpp/backward.hpp"
+namespace backward {
+backward::SignalHandling sh;
+} // namespace backward
 
 #ifdef UNIT_TEST
 
@@ -56,38 +51,29 @@ TEST_CASE("utils::format", "format operations") {
 
 int main(int argc, char **argv) {
 
-	//uint64_t x = 0x1201f;
-	//LOGD("%x %d", ~x, __builtin_ctzl(~x));
-	//return 0;
-
 	sqlite3db::Database db { "bbs.db" };
 
-	//db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
-
-	//db.exec("CREATE TABLE IF NOT EXISTS groupstate (userid INT, groupid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(groupid) REFERENCES msggroup(ROWID))");
-	//db.exec("CREATE TABLE IF NOT EXISTS topicstate (userid INT, topicid INT, lastread INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
-	//db.exec("CREATE TABLE IF NOT EXISTS readmsg (userid INT, msgid INT, topicid INT, FOREIGN KEY(userid) REFERENCES bbsuser(ROWID), FOREIGN KEY(msgid) REFERENCES message(ROWID), FOREIGN KEY(topicid) REFERENCES msgtopic(ROWID))");
-
+	auto q = db.query<int, string>("SELECT ROWID,name FROM msggroup WHERE ROWID=?", 1);
+	auto group = q.get<MessageBoard::Group>();
+/*
+	auto q = db.query("SELECT name,creatorid FROM msggroup WHERE ROWID=?", 1);
+	auto y = q.step<string,int>();
+	LOGD("RESULT %s %d", get<0>(y), get<1>(y));
+	q = db.query("SELECT creatorid FROM msggroup WHERE ROWID=?", 2);
+	auto x = q.step<int>();
+	LOGD("RESULT %d", x);
+	return 0;
+*/
 	LoginManager loginManager(db);
 
 	if(loginManager.get_id("admin") == LoginManager::NO_USER) {
 		loginManager.add_user("admin", "password");
-
-		//board.login(1);
-		//board.create_group("misc");
-		//board.enter_group("misc");
-		//board.post("First thread", "This is the first text in the first post of the first thread.... PHEW");
 	}
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	//logging::setLevel(logging::INFO);
-
 	// Turn off logging from the utility classes
 	//logging::useLogSpace("utils", false);
-
-	//loginManager.add_user("sasq", "password");
-	//loginManager.add_user("jonas", "secret");
-	//db.get_user("sasq");
 
 	TelnetServer telnet { 12345 };
 	telnet.setOnConnect([&](TelnetServer::Session &session) {
@@ -103,6 +89,8 @@ int main(int argc, char **argv) {
 				con = make_unique<PetsciiConsole>(session);
 			}
 			Console &console = *con;
+
+			//throw sqlite3db::db_exception("testing");
 
 			auto h = session.getHeight();
 			auto w = session.getWidth();
@@ -129,12 +117,50 @@ int main(int argc, char **argv) {
 			console.clear();
 			console.moveCursor(0,0);
 
+			//std::tuple<int, std::string> result;
+			//db.exec2(result, "q", a0, a1, "hello");
+			vector<string> history;
+			auto history_pos = history.begin();
+
 			while(true) {
 				auto sc = comboard.suggested_command();
 				comboard.write("\n~0(~8%s~0) # ", sc);
-				auto line = console.getLine();
+				LineEditor lineEd(console);
+				int key = 0;
+				string savedLine = "";
+				while(key != Console::KEY_ENTER) {
+					key = lineEd.update(500);
+					switch(key) {
+					case Console::KEY_UP:
+						if(history_pos > history.begin()) {
+							history_pos--;
+							lineEd.setString(*history_pos);
+							lineEd.setCursor(99999);
+							lineEd.refresh();
+						}
+						break;
+					case Console::KEY_DOWN:
+						if(history_pos < history.end()) {
+							history_pos++;
+							if(history_pos == history.end())
+								lineEd.setString("");
+							else
+								lineEd.setString(*history_pos);
+							lineEd.setCursor(99999);
+							lineEd.refresh();
+						}
+						break;
+					}
+				}
+
+				auto line = lineEd.getResult();
+
 				if(line == "")
 					line = sc;
+				else {
+					history.push_back(line);
+					history_pos = history.end();
+				}
 				console.write("\n");
 				if(!comboard.exec(line)) {
 					loginManager.logout_user(userId);

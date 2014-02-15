@@ -7,35 +7,69 @@
 using namespace bbs;
 using namespace utils;
 using namespace std;
+using std::chrono::system_clock;
 
 ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : users(lm), board(board), console(console), 
 	commands { 			
-		{ "list groups", [&](const vector<string> &args) { 
+		{ "list groups", "List all groups", [&](const vector<string> &args) { 
 			LOGD("List groups");
+			write("\n");
 			for(const auto &g : board.list_groups()) {
 				//time_t tt = (time_t)g.last_post;
 				//const char *t = ctime(&tt);
-				write("~2%s ~3Created by %s ~0LAST POST: %d\n", g.name, users.get(g.creator), 0);
+				write("~f%s~0 created by ~f%s~0\n", g.name, users.get(g.creator));
 			}
 		} },
-
+/*
 		{ "flush", [&](const vector<string> &args) { 
 			board.flush_bits();
 		} },
-
-		{ "logout", [&](const vector<string> &args) { 
+*/
+		{ "logout", "Log out from bbs", [&](const vector<string> &args) { 
+			board.flush_bits();
 		} },
-		{ "quit", [&](const vector<string> &args) { 
+
+		{ "list commands", "List all commands", [&](const vector<string> &args) { 
+			write("\n");
+			for(auto &c : commands) {
+				write("~1%s ~c- %s~0\n", c.full_text, c.description);
+			}
 		} },
 
-		{ "list users", [&](const vector<string> &args) { 
+
+		{ "status", "Show some status information", [&](const vector<string> &args) { 
+			auto start = board.first_msg();
+			auto end = board.last_msg();
+			int unread_count = 0;
+			for(auto i = start; i < end; i++) {
+				if(!board.is_read(i))
+					unread_count++;
+			}
+
+			auto tp = system_clock::now();
+			auto tt = system_clock::to_time_t(tp);
+		 	auto timeinfo = localtime(&tt);
+ 			char buffer[128];
+  			strftime(buffer,sizeof(buffer),"%d %b %H:%M ",timeinfo);
+
+  			auto group_name = board.current_group().name;
+  			if(group_name == "")
+  				group_name = "None";
+
+  			write("\n%d unread messages\nCurrent group: %s\nCurrent time: %s\n", unread_count, group_name, buffer);
+
+		} },
+
+		{ "list users", "list all users", [&](const vector<string> &args) { 
 			auto ulist = users.list_users();
+			write("\n");
 			for(auto &u : ulist)
 				write("%s\n", u);
 		} },
 
-		{ "who", [&](const vector<string> &args) { 
+		{ "who", "Show who is online", [&](const vector<string> &args) { 
 			auto ulist = users.list_logged_in();
+			write("\n");
 			for(auto &u : ulist)
 				write("%s\n", u);
 		} },
@@ -43,33 +77,35 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 		{ "list topics", "List all topics in the current group", [&](const vector<string> &args) { 
 			LOGD("List topics");
 			auto group = board.current_group();
-			write("Topics in group '%s'", group.name);
+			write("\nTopics in group ~f%s~0\n", group.name);
 			for(const auto &t : board.list_topics()) {
-				write(format("%s (%d)\n", t.name, users.get(t.creator)));
+				write("%s (~c%d~0)\n", t.name, users.get(t.creator));
 			}
 		} },
 
 		{ "list unread", "List all unread messages", [&](const vector<string> &args) { 
 			auto start = board.first_msg();
 			auto end = board.last_msg();
+			write("\n");
 			for(auto i = start; i < end; i++) {
 				if(!board.is_read(i)) {
 					auto msg = board.get_message(i);
 					auto topic = board.get_topic(msg.topic);
 					auto group = board.get_group(topic.group);
-					write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
+					write("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator));
 				}
 			}
 		} },
 
-		{ "list all", "List all messages", [&](const vector<string> &args) { 
+		{ "list messages", "List all messages", [&](const vector<string> &args) { 
 			auto start = board.first_msg();
 			auto end = board.last_msg();
+			write("\n");
 			for(auto i = start; i < end; i++) {
 				auto msg = board.get_message(i);
 				auto topic = board.get_topic(msg.topic);
 				auto group = board.get_group(topic.group);
-				write(format("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator)));
+				write("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator));
 			}
 		} },
 
@@ -86,7 +122,7 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			auto msg = board.get_message(msgid);
 			auto topic = board.get_topic(msg.topic);
 			auto group = board.get_group(topic.group);
-			write("Group '%s' topic '%s'\n", group.name, topic.name);
+			write("\nGroup:~f%s~0 Topic:~f%s~0\n", group.name, topic.name);
 			board.enter_group(group.id);
 			select_topic(topic.id);
 			//currentMsgThread = board.get_thread(topic.first_msgid);
@@ -129,7 +165,7 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			if(g == 0)
 				write("Create group failed\n");
 			else
-				write(format("Group '%s' created\n", args[0]));
+				write("Group '%s' created\n", args[0]);
 		} },
 
 		{ "create user", "Create a new user", "!s!s", [&](const vector<string> &args) {
@@ -141,14 +177,15 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			if(id == 0)
 				write("Create user failed\n");
 			else
-				write(format("User '%s' created\n", args[0]));
+				write("User '%s' created\n", args[0]);
 		} },
 
 		{ "enter group", "Enter a specific group", "!g", [&](const vector<string> &args) {
 			auto g = board.enter_group(args[0]);
-			if(g == 0)
+			if(g.id == 0)
 				write("No such group\n");
 			else {
+				write("\nEntered group %s\n", g.name);
 				lastShown.id = 0;
 			}
 		} },
@@ -162,19 +199,25 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			}
 
 			auto topic = args.size() > 0 ? args[0] : console.getLine("TOPIC:");
-			auto text = args.size() > 1 ? args[1] : edit();
-			board.post(topic, text);
-			lastShown.id = 0;
+			if(topic != "") {
+				auto text = args.size() > 1 ? args[1] : edit();
+				if(text != "") {
+					auto mid = board.post(topic, text);
+					lastShown.id = 0;
+					write("\nMessage #%d posted\n", mid);
+				}
+			}
 		} },
 
-		{ "reply", "Reply to a message", "?m", [&](const vector<string> &args) { 
+		{ "comment", "Reply to a message", "?m", [&](const vector<string> &args) { 
 			//LOGD("List groups"); 
 			auto mid = lastShown.id;
 			if(args.size() == 1)
 				mid = std::stol(args[0]);
 			if(mid > 0) {
 				auto text = edit();
-				board.reply(mid, text);
+				auto rid = board.reply(mid, text);
+				write("\nMessage #%d posted\n", rid);
 			} else
 				write("Reply failed\n");
 			lastShown.id = 0;	
@@ -210,7 +253,22 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 		s = "1 reply";
 	else
 		s = format("%d replies", replies.size());
-	write(format("~0Msg #%d ~f%s%s~c\n%s~0\nby %s. %s\n", msg.id, msg.parent == 0 ? "" : "Re:", topic.name, msg.text, users.get(msg.creator), s));
+
+	//auto tp = system_clock::from_time_t(msg.time_stamp);
+	time_t tt = msg.timestamp;
+
+ 	auto timeinfo = localtime(&tt);
+ 	char buffer[128];
+  	strftime(buffer,sizeof(buffer),"%d %b %H:%M ",timeinfo);
+
+	//string timeString = ctime(&tt);
+
+	auto lines = text_wrap(msg.text, console.getWidth());
+
+	write("\n~0Msg #%d ~f%s%s ~0on %s~c\n", msg.id, msg.parent == 0 ? "" : "Re:", topic.name, buffer);
+	for(auto &l : lines)
+		write(l + "\n");
+	write("~0by %s. %s\n", users.get(msg.creator), s);
 
 	//for(const auto &r : replies) {
 	//	write("~9Reply #%d by ~8%s~0\n", r.id, users.get(r.creator));
@@ -220,6 +278,46 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 }
 
 string ComBoard::edit() {
+
+	int lineno = 1;
+	vector<string> lines;
+	bool save = true;
+	bool done = false;
+	write("\n");
+	while(!done) {
+		write("~8%02d:~0", lineno);
+		LineEditor ed(console);
+		int key = 0;
+		while(key != Console::KEY_ENTER) {
+			key = ed.update(500);
+			switch(key) {
+			}
+		}
+		auto line = ed.getResult();
+		if(line[0] == '.') {
+			switch(line[1]) {
+			case 's':
+				done = true;
+				break;
+			case 'q':
+				save = false;
+				done = true;
+			}
+		} else {
+			lineno++;
+			lines.push_back(line);
+			auto wrapped = text_wrap(line, console.getWidth()-3);
+			for(auto &w : wrapped) {
+				console.moveCursor(3, console.getCursorY());
+				console.write(w + "\n");
+			}
+		}
+	}
+	if(!save)
+		return "";
+	return join(lines, "\n");
+
+	/*
 	auto ed = FullEditor(console);
 	while(true) {
 		auto rc = ed.update(500);
@@ -228,7 +326,7 @@ string ComBoard::edit() {
 		}
 	}
 	string r = rstrip(ed.getResult(), '\n');
-	return r;
+	return r;*/
 }
 
 string ComBoard::suggested_command() {
@@ -330,6 +428,8 @@ bool ComBoard::exec(const string &line) {
 		for(auto &a : c.args) {
 			LOGD("%d %d", (int)a.argtype, i);
 			if(i == parts.size()) {
+				if(a.optional)
+					continue;
 				write("Too few arguments\n");
 				ok = false;
 				break;
@@ -349,8 +449,16 @@ bool ComBoard::exec(const string &line) {
 				try {
 					auto group = board.get_group(parts[i]);
 				} catch (msgboard_exception &e) {
-					write("No such group\n");
-					ok = false;
+					for(auto &g : board.list_groups()) {
+						ok = false;
+						if(g.name.compare(0, parts[i].length(), parts[i]) == 0) {
+							parts[i] = g.name;
+							ok = true;
+							break;
+						}
+					}
+					if(!ok)
+						write("No such group\n");
 				}
 			}
 			if(!ok) break;
@@ -381,13 +489,8 @@ bool ComBoard::exec(const string &line) {
 class LocalTerminal : public Terminal {
 public:
 
-	virtual void open() override {
-	}
-
-	virtual void close() override {
-	}
-
-
+	virtual void open() override {}
+	virtual void close() override {}
 
 	virtual int write(const std::vector<Char> &source, int len) { 
 		return fwrite(&source[0], 1, len, stdout);

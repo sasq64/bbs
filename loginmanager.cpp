@@ -12,9 +12,9 @@ using namespace utils;
 uint64_t LoginManager::verify_user(const std::string &handle, const std::string &password) {
 	auto s = utils::sha256(handle + "\t" + password);
 	uint64_t id = NO_USER;
-	db.execf("SELECT ROWID FROM bbsuser WHERE sha=%Q;", [&](int i, const vector<string> &result) {
-		id = std::stol(result[0]);
-	}, s);
+	auto q = db.query<uint64_t>("SELECT ROWID FROM bbsuser WHERE sha=?", s);
+	if(q.step())
+		id = q.get();
 	return id;
 }
 
@@ -37,40 +37,38 @@ std::vector<std::string> LoginManager::list_logged_in() {
 
 	vector<string> handles;
 	for(auto &id : logged_in) {
-		db.execf("SELECT handle FROM bbsuser WHERE ROWID=%d;", [&](int i, const vector<string> &result) {
-			handles.push_back(result[0]);
-		}, id); 
+		handles.push_back(db.query<string>("SELECT handle FROM bbsuser WHERE ROWID=?", id).get());
 	}
 	return handles;
 }
 
 std::vector<std::string> LoginManager::list_users() {
 	vector<string> handles;
-	db.execf("SELECT handle FROM bbsuser", [&](int i, const vector<string> &result) {
-		handles.push_back(result[0]);
-	}); 
+	auto q = db.query<string>("SELECT handle FROM bbsuser");
+	while(q.step())
+		handles.push_back(q.get());
 	return handles;
 }
 
 
 uint64_t LoginManager::get_id(const std::string &handle) {
 	uint64_t id = NO_USER;
-	db.execf("SELECT ROWID FROM bbsuser WHERE handle=%Q;", [&](int i, const vector<string> &result) {
-		id = std::stol(result[0]);
-	}, handle);
+	auto q = db.query<uint64_t>("SELECT ROWID FROM bbsuser WHERE handle=?", handle);
+	if(q.step())
+		id = q.get();
 	return id;
 }
 
 std::string LoginManager::get(uint64_t id) {
 	std::string handle = "NO USER";
-	db.execf("SELECT handle FROM bbsuser WHERE ROWID=%d;", [&](int i, const vector<string> &result) {
-		handle = result[0];
-	}, id);
+	auto q = db.query<string>("SELECT handle FROM bbsuser WHERE ROWID=?", id);
+	if(q.step())
+		handle = q.get();
 	return handle;
 }
 
 uint64_t LoginManager::add_user(const std::string &handle, const std::string &password) {
 	auto sha = utils::sha256(handle + "\t" + password);
-	db.exec("INSERT INTO bbsuser (sha, handle) VALUES (%Q, %Q)", sha, handle);
+	db.query("INSERT INTO bbsuser (sha, handle) VALUES (?, ?)", sha, handle).step();
 	return db.last_rowid();
 }

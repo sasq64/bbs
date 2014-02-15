@@ -15,9 +15,10 @@
 * Auto prompt
 
 * Save/restore readbits
-
+* MORE prompt
 * UP/DOWN history
 
 BUGS
 
+* getPassword 
 * Scrolling when Y >= HEIGHT causes infinte loop

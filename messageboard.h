@@ -40,8 +40,8 @@ public:
 	};
 
 	struct Message {
-		Message(uint64_t id = 0, const std::string &t = "", uint64_t topic = 0, uint64_t creator = 0, uint64_t parent = 0, bool r = true)
-			: id(id), text(t), topic(topic), creator(creator), parent(parent), read(r) {}
+		Message(uint64_t id = 0, const std::string &t = "", uint64_t topic = 0, uint64_t creator = 0, uint64_t parent = 0, uint64_t ts = 0, bool r = true)
+			: id(id), text(t), topic(topic), creator(creator), parent(parent), timestamp(ts), read(r) {}
 		uint64_t id;
 		std::string text;
 		uint64_t topic;
@@ -71,10 +71,9 @@ public:
 
 	uint64_t last_msg() {
 		uint64_t maxm = -1;
-		db.execf("SELECT MAX(ROWID) FROM message", [&](int i, const std::vector<std::string> &result) {
-			if(result[0] != "")
-				maxm = std::stol(result[0]);
-		});
+		auto q = db.query<uint64_t>("SELECT MAX(ROWID) FROM message");
+		if(q.step())
+			maxm = q.get();
 		LOGD("LAST MSG %d", maxm);
 		return maxm+1;
 	}
@@ -90,15 +89,15 @@ public:
 	}
 
 	Group current_group() {
-		return get_group(currentGroup);
+		return currentGroup;
 	}
 
 	std::vector<Message> get_replies(uint64_t id);
 
 	uint64_t create_group(const std::string &name);
 	const std::vector<Group> list_groups();
-	uint64_t enter_group(const std::string &group_name);
-	uint64_t enter_group(uint64_t groupid);
+	Group enter_group(const std::string &group_name);
+	Group enter_group(uint64_t groupid);
 	const std::vector<Topic> list_topics();
 	const std::vector<Message> list_messages(uint64_t topic_id);
 	uint64_t post(const std::string &topic_name, const std::string &text);
@@ -106,7 +105,7 @@ public:
 private:
 	sqlite3db::Database &db;
 	uint64_t currentUser;
-	uint64_t currentGroup;
+	Group currentGroup;
 	BitField msgbits;
 };
 

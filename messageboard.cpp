@@ -4,8 +4,17 @@
 #include <coreutils/log.h>
 #include <coreutils/file.h>
 
+#include <chrono>
+
 using namespace std;
 using namespace utils;
+using std::chrono::system_clock;
+
+uint64_t get_timestamp() {
+	auto tp = system_clock::now();
+	auto ts = system_clock::to_time_t(tp);
+	return ts;
+}
 
 MessageBoard::MessageBoard(sqlite3db::Database &db, uint64_t userId) : db(db), currentUser(userId) {
 
@@ -16,121 +25,93 @@ MessageBoard::MessageBoard(sqlite3db::Database &db, uint64_t userId) : db(db), c
 
 	LOGD("User %d on board", userId);
 
-	auto lm = last_msg();
-	msgbits.grow(lm);
-	db.get_blob(format("SELECT bits FROM msgbits WHERE user=%d", userId), 0, msgbits.get_vector());
+	//auto lm = last_msg();
+	//msgbits.grow(lm);
 
-	//File mfile { format("msgbits.%d", userId) };
-	//if(mfile.exists()) {
-	//	msgbits.set(mfile.getPtr(), mfile.getSize()*8);
-	//}
+	auto query = db.query<BitField::storage_type>("SELECT bits FROM msgbits WHERE user=?", userId);
+	msgbits = BitField(query.get());
 }
 
 void MessageBoard::flush_bits() {
-	//File mfile { format("msgbits.%d", currentUser) };
-	//mfile.write((const uint8_t*)msgbits.get(), msgbits.size()*8);
-	//mfile.close();
 	msgbits.grow(1);
-	db.put_blob(format("INSERT OR REPLACE INTO msgbits(user,bits) VALUES (%d,?)", currentUser), 1, msgbits.get_vector());
+	db.exec("INSERT OR REPLACE INTO msgbits(user,bits) VALUES (?,?)", currentUser, msgbits.get_vector());
 }
 
 uint64_t MessageBoard::create_group(const std::string &name) {
-	db.exec("INSERT INTO msggroup (name, creatorid) VALUES (%Q, %d)", name, currentUser);
+	db.exec("INSERT INTO msggroup (name, creatorid) VALUES (?, ?)", name, currentUser);
 	return db.last_rowid();
 }
 
 const std::vector<MessageBoard::Group> MessageBoard::list_groups() {
-	vector<MessageBoard::Group> groups;
-	db.execf("SELECT ROWID,name,creatorid FROM msggroup", [&](int i, const vector<string> &result) {
-		groups.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]));
-	});
+	vector<Group> groups;
+	auto q = db.query<uint64_t, string, uint64_t>("SELECT ROWID,name,creatorid FROM msggroup");
+	while(q.step()) {
+		groups.push_back(q.get<Group>());
+	}
 	return groups; // NOTE: std::move ?
 }
 
-uint64_t MessageBoard::enter_group(uint64_t id) {
-	currentGroup = id;
-	return id;
+MessageBoard::Group MessageBoard::enter_group(uint64_t id) {
+	currentGroup = get_group(id);
+	return currentGroup;
 }
 
-uint64_t MessageBoard::enter_group(const std::string &group_name) {
-	uint64_t id = 0;
-	//uint64_t lastpost = 0;
-	db.execf("SELECT ROWID FROM msggroup WHERE name=%Q", [&](int i, const vector<string> &result) {
-		id = std::stol(result[0]);
-		//lastpost = std::stol(result[1]);
-	}, group_name);
-	//auto id = db.select_first<pair<uint64_t, uint64_t>>("SELECT ROWID,lastpost FROM msggroup WHERE name=%Q", group_name);
-	//LOGD("Last post %d", lastpost);
-	if(id != 0) {
-		currentGroup = id;
-	}
-	return id;
+MessageBoard::Group MessageBoard::enter_group(const std::string &group_name) {
+	currentGroup = get_group(group_name);
+	return currentGroup;
 }
 
 const std::vector<MessageBoard::Topic> MessageBoard::list_topics() {
-	vector<MessageBoard::Topic> topics;
-	LOGD("currentGroup %d", currentGroup);
-	db.execf("SELECT ROWID,firstmsg,groupid,name,creatorid FROM msgtopic WHERE groupid=%d", [&](int i, const vector<string> &result) {
-		LOGD(result[1]);
-		topics.emplace_back(std::stol(result[0]), std::stol(result[1]), std::stol(result[2]), result[3], std::stol(result[4]));
-	}, currentGroup);
+	vector<Topic> topics;
+	auto q = db.query<uint64_t, uint64_t, uint64_t, string, uint64_t>("SELECT ROWID,firstmsg,groupid,name,creatorid FROM msgtopic WHERE groupid=?", currentGroup.id);
+	while(q.step()) {
+		topics.push_back(q.get<Topic>());
+	}
 	return topics; // NOTE: std::move ?
 }
 
 const std::vector<MessageBoard::Message> MessageBoard::list_messages(uint64_t topic_id) {
-	vector<MessageBoard::Message> messages;
-	db.execf("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE topicid=%d", [&](int i, const vector<string> &result) {
-		LOGD(result[1]);
-		//messages.emplace_back(std::stol(result[0]), result[1]);
-		messages.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), std::stol(result[3]), std::stol(result[4]), std::stol(result[5]));
-	}, topic_id);
+	vector<Message> messages;	
+	auto q = db.query<uint64_t, string, uint64_t, uint64_t, uint64_t, uint64_t>("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE topicid=?", topic_id);
+	while(q.step()) {
+		messages.push_back(q.get<Message>());
+	}
 	return messages; // NOTE: std::move ?		
 }
 
 vector<MessageBoard::Message> MessageBoard::get_replies(uint64_t id) {
-	vector<MessageBoard::Message> messages;
-	db.execf("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE parentid=%d", [&](int i, const vector<string> &result) {
-		messages.emplace_back(std::stol(result[0]), result[1], std::stol(result[2]), std::stol(result[3]), std::stol(result[4]), std::stol(result[5]));
-	}, id);
+	vector<Message> messages;
+	auto q = db.query<uint64_t, string, uint64_t, uint64_t, uint64_t, uint64_t>("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE parentid=?", id);
+	while(q.step()) {
+		messages.push_back(q.get<Message>());
+	}
 	return messages; // NOTE: std::move ?		
 }
 
 uint64_t MessageBoard::post(const std::string &topic_name, const std::string &text) {
 	auto ta = db.transaction();
-	uint64_t ts = 12345;
 
-	if(currentGroup < 1)
+	auto ts = get_timestamp();
+	if(currentGroup.id < 1)
 		throw msgboard_exception("No current group");
 
-	db.exec("INSERT INTO msgtopic (name,creatorid,groupid) VALUES (%Q, %d, %d)", topic_name, currentUser, currentGroup);
+	db.exec("INSERT INTO msgtopic (name,creatorid,groupid) VALUES (?, ?, ?)", topic_name, currentUser, currentGroup.id);
 	auto topicid = db.last_rowid();
-	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (%Q, %d, 0, %d, %d)", text, currentUser, topicid, ts);
+	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (?, ?, 0, ?, ?)", text, currentUser, topicid, ts);
 	auto msgid = db.last_rowid();
-	db.exec("UPDATE msgtopic SET firstmsg=%d WHERE ROWID=%d", msgid, topicid);
-
+	db.exec("UPDATE msgtopic SET firstmsg=? WHERE ROWID=?", msgid, topicid);
 	mark_read(msgid);
 
-	//time_t t;
-	//time(&t);
-	//long d = 12345;
-	//db.exec("UPDATE msggroup SET lastpost=%d,lastby=%d WHERE ROWID=%d", t, currentUser,currentGroup);
-	//db.exec("UPDATE msgtopic SET lastpost=%d,lastby=%d WHERE ROWID=%d", t, currentUser, topicid);
-	//db.exec("INSERT INTO readmsg (userid, msgid) VALUES (%d,%d)", currentUser, msgid);
-	//db.exec("INSERT INTO groupstate (userid, groupid) VALUES (%d, %d)", currentUser, currentGroup);
-	//db.exec("INSERT INTO topicstate (userid, topicid) VALUES (%d, %d)", currentUser, currentGroup);
 	ta.commit();
 	return msgid;
 }
 
 uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 
-	uint64_t topicid = 0;
-	db.execf("SELECT topicid FROM message WHERE ROWID=%d", [&](int i, const vector<string> &result) {
-		topicid = std::stol(result[0]);
-	}, msgid);
+	uint64_t topicid = db.query<uint64_t>("SELECT topicid FROM message WHERE ROWID=?", msgid).get();
 	if(topicid == 0) throw msgboard_exception("Repy failed, no such topic");
-	uint64_t ts = 12345;
-	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (%Q, %d, %d, %d, %d)", text, currentUser, msgid, topicid, ts);
+	auto ts = get_timestamp();
+	db.exec("INSERT INTO message (contents, creatorid, parentid, topicid, timestamp) VALUES (?, ?, ?, ?, ?)", text, currentUser, msgid, topicid, ts);
 
 	msgid = db.last_rowid();
 	mark_read(msgid);
@@ -139,39 +120,36 @@ uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 }
 
 MessageBoard::Message MessageBoard::get_message(uint64_t msgid) {
-	Message msg;
-	db.execf("SELECT contents,topicid,creatorid,parentid,timestamp FROM message WHERE ROWID=%d", [&](int i, const vector<string> &result) {
-		msg = Message(msgid, result[0], std::stol(result[1]), std::stol(result[2]), std::stol(result[3]), std::stol(result[4]));
-	}, msgid);
-	if(msg.id == 0) throw msgboard_exception("No such message");
-	return msg;
+	auto q = db.query<uint64_t, string, uint64_t, uint64_t, uint64_t, uint64_t>("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE ROWID=?", msgid);
+	if(q.step())
+		return q.get<Message>();
+	else
+		throw msgboard_exception("No such message");
 };
 
 MessageBoard::Topic MessageBoard::get_topic(uint64_t id) {
 	Topic topic;
-	db.execf("SELECT msgtopic.ROWID,firstmsg,groupid,name,creatorid FROM msgtopic WHERE msgtopic.ROWID=%d", [&](int i, const vector<string> &result) {
-		topic = Topic(std::stol(result[0]), std::stol(result[1]), std::stol(result[2]), result[3], std::stol(result[4]));
-	}, id);
-	if(topic.id == 0) throw msgboard_exception("No such topic");
-	return topic;
+	auto q = db.query<uint64_t, uint64_t, uint64_t, string, uint64_t>("SELECT ROWID,firstmsg,groupid,name,creatorid FROM msgtopic WHERE ROWID=?", id);
+	if(q.step())
+		return q.get<Topic>();
+	else
+		throw msgboard_exception("No such topic");
 };
 
 MessageBoard::Group MessageBoard::get_group(uint64_t id) {
-	Group group;
-	db.execf("SELECT ROWID,name FROM msggroup WHERE ROWID=%d", [&](int i, const vector<string> &result) {
-		group = Group(std::stol(result[0]), result[1]);
-	}, id);
-	if(group.id == 0) throw msgboard_exception("No such group");
-	return group;
+	auto q = db.query<uint64_t, string, uint64_t>("SELECT ROWID,name,creatorid FROM msggroup WHERE ROWID=?", id);
+	if(q.step())
+		return q.get<Group>();
+	else
+		throw msgboard_exception("No such group");
 };
 
 MessageBoard::Group MessageBoard::get_group(const std::string &name) {
-	Group group;
-	db.execf("SELECT ROWID,name FROM msggroup WHERE name=%Q", [&](int i, const vector<string> &result) {
-		group = Group(std::stol(result[0]), result[1]);
-	}, name);
-	if(group.id == 0) throw msgboard_exception("No such group");
-	return group;
+	auto q = db.query<uint64_t, string, uint64_t>("SELECT ROWID,name,creatorid FROM msggroup WHERE name=?", name);
+	if(q.step())
+		return q.get<Group>();
+	else
+		throw msgboard_exception("No such group");
 };
 
 #ifdef MY_UNIT_TEST
