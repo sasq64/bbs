@@ -2,13 +2,10 @@
 #include <coreutils/log.h>
 #include <coreutils/utils.h>
 #include <coreutils/file.h>
-#include <bbsutils/telnetserver.h>
 #include <bbsutils/console.h>
-#include <bbsutils/editor.h>
 
 #include <bbsutils/ansiconsole.h>
 #include <bbsutils/petsciiconsole.h>
-
 
 #include <unordered_set>
 #include <string>
@@ -120,14 +117,14 @@ void showPetscii(Console &console, const std::string &name) {
 			t.fg = Console::BLACK;
 		}
 	}
-	console.rawPut(142);
+	console.putChar(142);
 	console.setTiles(tiles);
 	console.flush();
 	console.moveCursor(39, 24);
 	console.setColor(Console::BLACK, Console::BLACK);
 	console.getKey();
 	console.clear();
-	console.rawPut(14);
+	console.putChar(14);
 }
 
 struct Area {
@@ -189,8 +186,9 @@ private:
 	int items;
 };
 
-
+/*
 template<> typename ListView<string>::RenderFunction ListView<string>::simpleRenderFunction =
 	[](Console &c, Area &a, int item, const string &data) {
 		c.put(a.x0, a.y0++, data);
 	};
+*/

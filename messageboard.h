@@ -41,7 +41,9 @@ public:
 
 	struct Message {
 		Message(uint64_t id = 0, const std::string &t = "", uint64_t topic = 0, uint64_t creator = 0, uint64_t parent = 0, uint64_t ts = 0, bool r = true)
-			: id(id), text(t), topic(topic), creator(creator), parent(parent), timestamp(ts), read(r) {}
+			: id(id), text(t), topic(topic), creator(creator), parent(parent), timestamp(ts), read(r) {
+				LOGD("Message created id %d text %s", id, text);
+			}
 		uint64_t id;
 		std::string text;
 		uint64_t topic;
@@ -50,6 +52,8 @@ public:
 		uint64_t timestamp;
 		bool read;
 	};
+
+	uint64_t current_user() { return currentUser; }
 
 	Message get_message(uint64_t msgid);
 	Topic get_topic(uint64_t topicid);
@@ -72,8 +76,12 @@ public:
 	uint64_t last_msg() {
 		uint64_t maxm = -1;
 		auto q = db.query<uint64_t>("SELECT MAX(ROWID) FROM message");
-		if(q.step())
-			maxm = q.get();
+		try {
+			if(q.step())
+				maxm = q.get();
+		} catch(sqlite3db::db_exception &e) {
+			LOGD(e.what());
+		}
 		LOGD("LAST MSG %d", maxm);
 		return maxm+1;
 	}

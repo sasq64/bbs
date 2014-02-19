@@ -29,7 +29,8 @@ MessageBoard::MessageBoard(sqlite3db::Database &db, uint64_t userId) : db(db), c
 	//msgbits.grow(lm);
 
 	auto query = db.query<BitField::storage_type>("SELECT bits FROM msgbits WHERE user=?", userId);
-	msgbits = BitField(query.get());
+	if(query.step())
+		msgbits = BitField(query.get());
 }
 
 void MessageBoard::flush_bits() {
@@ -120,7 +121,9 @@ uint64_t MessageBoard::reply(uint64_t msgid, const std::string &text) {
 }
 
 MessageBoard::Message MessageBoard::get_message(uint64_t msgid) {
+	LOGD("Query msg");
 	auto q = db.query<uint64_t, string, uint64_t, uint64_t, uint64_t, uint64_t>("SELECT ROWID,contents,topicid,creatorid,parentid,timestamp FROM message WHERE ROWID=?", msgid);
+	LOGD("Step msg");
 	if(q.step())
 		return q.get<Message>();
 	else
@@ -178,13 +181,13 @@ TEST_CASE("msgboard", "Messageboard test") {
 
 	uint64_t id;
 
+
 	id = mb.post("First post", "In the misc group");
 	REQUIRE(id > 0);
 	id = mb.post("Second post", "Also in the misc group");
 	REQUIRE(id > 0);
 	id = mb.reply(id, "This is a reply");
 	REQUIRE(id > 0);
-
 	MessageBoard mb2 { db, 1 };
 
 	mb2.enter_group("misc");
@@ -207,7 +210,8 @@ TEST_CASE("msgboard", "Messageboard test") {
 
 	mb2.mark_read(3);
 	REQUIRE(mb2.get_first_unread_msg() == 5);
-
+#if 0
+#endif
 }
 
 #endif

@@ -1,0 +1,65 @@
+MSGBOARD
+
+bitfield for read messages
+bits for groups not joined are always marked read
+so leaving a group clears read status
+
+
+get first unread msgid (will always be for group user is in)
+get topicid for from msgid
+then all msgids of that topic
+
+COLOR SCHEME
+~0 default (WHITE)
+~1 Hilight (CYAN)
+~2 Diffuse (GRAY)
+~3 Text (LIGHT GRAY)
+~4 Important (RED)
+
+
+TODO
+====
+
+Editor follow x
+Tabs to TAB,0,0,0 ? Skip over and save correctly.
+Pageup / Pagedown
+Unicode chars not converted to petscii in editor
+
+Full Chat
+/EXIT
+/NAMES
+/ME
+
+Colorize lines
+Wrap lines
+
+
+
+LineEditor
+
+
+currentLine
+xoffset
+xpos
+
+cursorX = startX + xpos;
+if(cursorX < startX) {
+ 
+
+
+put(line.substr(xoffset, maxlen))
+
+if xoffset > 0 put start marker
+if len > maxlen put end marker
+ movecursor x - xoffset
+
+
+
+if cursor > ?
+ xoffset++
+if cursor < ?
+ xoffset--
+
+
+    xStart        
+    V

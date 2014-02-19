@@ -1,4 +1,4 @@
-
+#include "bbs.h"
 #include "comboard.h"
 
 #include <bbsutils/ansiconsole.h>
@@ -9,7 +9,7 @@ using namespace utils;
 using namespace std;
 using std::chrono::system_clock;
 
-ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : users(lm), board(board), console(console), 
+ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console) : session(session), users(BBS::instance().getlm()), board(board), console(console), 
 	commands { 			
 		{ "list groups", "List all groups", [&](const vector<string> &args) { 
 			LOGD("List groups");
@@ -17,14 +17,22 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			for(const auto &g : board.list_groups()) {
 				//time_t tt = (time_t)g.last_post;
 				//const char *t = ctime(&tt);
-				write("~f%s~0 created by ~f%s~0\n", g.name, users.get(g.creator));
+				write("~1%s~0 created by ~f%s~0\n", g.name, users.get(g.creator));
 			}
 		} },
-/*
-		{ "flush", [&](const vector<string> &args) { 
-			board.flush_bits();
+
+		{ "edit plan", "Edit your plan (visible to all)", [&](const vector<string> &args) { 
+			auto plan = BBS::instance().get_user_data(board.current_user(), "plan");
+			fulledit(plan, false);
+			BBS::instance().set_user_data(board.current_user(), "plan", plan);
 		} },
-*/
+
+		{ "finger !u", "Read a users plan", [&](const vector<string> &args) { 
+			auto uid = users.get_id(args[0]);
+			auto plan = BBS::instance().get_user_data(uid, "plan");
+			write(plan);
+		} },
+
 		{ "logout", "Log out from bbs", [&](const vector<string> &args) { 
 			board.flush_bits();
 		} },
@@ -32,6 +40,8 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 		{ "list commands", "List all commands", [&](const vector<string> &args) { 
 			write("\n");
 			for(auto &c : commands) {
+				if(c.umask == 1 && board.current_user() != 1)
+					continue;
 				write("~1%s ~c- %s~0\n", c.full_text, c.description);
 			}
 		} },
@@ -166,7 +176,7 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 				write("Create group failed\n");
 			else
 				write("Group '%s' created\n", args[0]);
-		} },
+		}, 1 },
 
 		{ "create user", "Create a new user", "!s!s", [&](const vector<string> &args) {
 			if(args.size() != 2) {
@@ -178,7 +188,7 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 				write("Create user failed\n");
 			else
 				write("User '%s' created\n", args[0]);
-		} },
+		}, 1 },
 
 		{ "enter group", "Enter a specific group", "!g", [&](const vector<string> &args) {
 			auto g = board.enter_group(args[0]);
@@ -215,15 +225,21 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 			if(args.size() == 1)
 				mid = std::stol(args[0]);
 			if(mid > 0) {
-				auto text = edit();
+				auto msg = board.get_message(mid);
+				auto text = fulledit(msg.text, true);
 				auto rid = board.reply(mid, text);
 				write("\nMessage #%d posted\n", rid);
 			} else
 				write("Reply failed\n");
 			lastShown.id = 0;	
 		} },
-	}
-{}
+	},
+	variables { session.vars() },
+	texts { BBS::instance().text() }
+{
+	variables["you"] = users.get(board.current_user());
+	settings["fulledit"] = 1;
+}
 /*
 	enum Color {
 	0	WHITE,
@@ -245,6 +261,25 @@ ComBoard::ComBoard(LoginManager &lm, MessageBoard &board, Console &console) : us
 	};
 */
 
+// Msg #%[msgno] ~1%[topic] ~0on %[date]
+
+string bbs_format(std::string templ, std::unordered_map<std::string, std::string> &vars) {
+
+	size_t tstart = 0;
+	while(tstart != string::npos) {
+		tstart = templ.find("%[", tstart);
+		if(tstart != string::npos) {
+			auto tend = templ.find("]", tstart+2);
+			auto var = templ.substr(tstart+2, tend-tstart-2);
+			LOGD("Found var %s at %d,%d", var, tstart, tend);
+			if(vars.count(var) > 0)
+				templ.replace(tstart, tend-tstart+1, vars[var]);
+			tstart++;
+		}
+	}
+	return templ;
+}
+
 void ComBoard::show_message(const MessageBoard::Message &msg) {
 	auto topic = board.get_topic(msg.topic);
 	auto replies = board.get_replies(msg.id);
@@ -265,10 +300,23 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 
 	auto lines = text_wrap(msg.text, console.getWidth());
 
-	write("\n~0Msg #%d ~f%s%s ~0on %s~c\n", msg.id, msg.parent == 0 ? "" : "Re:", topic.name, buffer);
+	//unordered_map<string, string> vars;
+	variables["msgno"] = to_string(msg.id);
+	variables["topic"] = topic.name;
+	variables["date"] = buffer;
+	variables["poster"] = users.get(msg.creator);
+	variables["replies"] = s;
+
+	auto header = bbs_format(texts["msg_header"], variables);
+	write(header);
+	write("\n");
+	//write("\n~0Msg #%d ~f%s%s ~0on %s~c\n", msg.id, msg.parent == 0 ? "" : "Re:", topic.name, buffer);
 	for(auto &l : lines)
 		write(l + "\n");
-	write("~0by %s. %s\n", users.get(msg.creator), s);
+	auto footer = bbs_format(texts["msg_footer"], variables);
+	write(footer);
+	write("\n");
+	//write("~0by %s. %s\n", users.get(msg.creator), s);
 
 	//for(const auto &r : replies) {
 	//	write("~9Reply #%d by ~8%s~0\n", r.id, users.get(r.creator));
@@ -277,20 +325,47 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 	//write(currentMsg.text);
 }
 
+void ComBoard::show_text(const std::string &what) {
+
+	File f;
+	if(console.name() == "ansi") {		
+		f = File("text/" + what + ".ans");
+	} else if (console.name() == "ansi") {
+		f = File("text/" + what + ".pet");
+	}
+	if(!f.exists())
+		f = File("text/" + what + ".txt");
+
+	auto text = f.read();
+	LOGD("%s", text);
+	console.write(text);
+}
+
+
 string ComBoard::edit() {
 
 	int lineno = 1;
 	vector<string> lines;
 	bool save = true;
 	bool done = false;
-	write("\n");
+	int jumpTo = -1;
+	write("\n~fF7~0 = Post, ~fF5~0 = Cancel\n");
 	while(!done) {
-		write("~8%02d:~0", lineno);
+		write("~8%02d:~0", jumpTo >= 0 ? jumpTo : lineno);
 		LineEditor ed(console);
+		if(jumpTo >= 0)
+			ed.setString(lines[jumpTo-1]);
 		int key = 0;
-		while(key != Console::KEY_ENTER) {
+		while(key != Console::KEY_ENTER && !done) {
 			key = ed.update(500);
 			switch(key) {
+			case Console::KEY_F7:
+				done = true;
+				break;
+			case Console::KEY_F5:
+				save = false;
+				done = true;
+				break;
 			}
 		}
 		auto line = ed.getResult();
@@ -302,10 +377,20 @@ string ComBoard::edit() {
 			case 'q':
 				save = false;
 				done = true;
+			case 'e':
+				console.moveCursor(0, console.getCursorY());
+				console.fillLine(console.getCursorY());
+				jumpTo = stol(line.substr(2));
+				break;
 			}
 		} else {
-			lineno++;
-			lines.push_back(line);
+			if(jumpTo >= 0) {
+				lines[jumpTo-1] = line;
+				jumpTo = -1;
+			} else {
+				lineno++;
+				lines.push_back(line);
+			}
 			auto wrapped = text_wrap(line, console.getWidth()-3);
 			for(auto &w : wrapped) {
 				console.moveCursor(3, console.getCursorY());
@@ -316,9 +401,15 @@ string ComBoard::edit() {
 	if(!save)
 		return "";
 	return join(lines, "\n");
+}
 
-	/*
+string ComBoard::fulledit(const string &text, bool comment) {
+
 	auto ed = FullEditor(console);
+	if(comment)
+		ed.setComment(text);
+	else
+		ed.setString(text);
 	while(true) {
 		auto rc = ed.update(500);
 		if(rc == Console::KEY_F7) {
@@ -326,7 +417,7 @@ string ComBoard::edit() {
 		}
 	}
 	string r = rstrip(ed.getResult(), '\n');
-	return r;*/
+	return r;
 }
 
 string ComBoard::suggested_command() {
@@ -366,18 +457,21 @@ void ComBoard::select_topic(uint64_t topic_id) {
 	}
 }
 
+static int palette[] = { Console::WHITE, Console::CYAN, Console::GREY, Console::LIGHT_GREY, Console::RED };
+
 template <class... A> void ComBoard::write(const std::string &text, const A& ... args) {
 	string f = format(text, args...);
 	auto parts = split(f, "~", true);
 	bool first = true;
 	for(auto s : parts) {
 		if(!first) {
-			char c = 0;
+			uint8_t c = 0;
 			if(s[0] <= '9')
 				c = s[0] - '0';
 			else
 				c = s[0] - 'a' + 10;
-			console.setColor(c);
+			if(c >= 5) c = 0;
+			console.setColor(palette[c]);
 			s = s.substr(1);
 		}
 		first = false;
@@ -391,13 +485,17 @@ bool ComBoard::exec(const string &line) {
 		return true;
 
 	vector<Command*> foundCommands;
-	int largestMatch = 0;
+	size_t largestMatch = 0;
 	for(auto &c : commands) {
+
+		if(c.umask == 1 && board.current_user() != 1)
+			continue;
+
 		bool found = true;
 		if(parts.size() < c.text.size()) {
 			continue;
 		}
-		for(int i=0; i<c.text.size(); i++) {
+		for(size_t i=0; i<c.text.size(); i++) {
 			if(c.text[i].compare(0, parts[i].length(), parts[i]) != 0) {
 				found = false;
 				break;
@@ -423,7 +521,7 @@ bool ComBoard::exec(const string &line) {
 		//int acount = parts.size() - c.text.size();
 		parts.erase(parts.begin(), parts.begin() + c.text.size());
 		bool ok = true;
-		int i = 0;
+		size_t i = 0;
 		LOGD("We have %d args", parts.size());
 		for(auto &a : c.args) {
 			LOGD("%d %d", (int)a.argtype, i);
@@ -449,8 +547,8 @@ bool ComBoard::exec(const string &line) {
 				try {
 					auto group = board.get_group(parts[i]);
 				} catch (msgboard_exception &e) {
+					ok = false;
 					for(auto &g : board.list_groups()) {
-						ok = false;
 						if(g.name.compare(0, parts[i].length(), parts[i]) == 0) {
 							parts[i] = g.name;
 							ok = true;
@@ -459,6 +557,21 @@ bool ComBoard::exec(const string &line) {
 					}
 					if(!ok)
 						write("No such group\n");
+				}
+			} else if(a.argtype == Command::USER) {
+				try {
+					auto id = users.get_id(parts[i]);
+				} catch (msgboard_exception &e) {
+					ok = false;
+					for(auto &s : users.list_users()) {
+						if(s.compare(0, parts[i].length(), parts[i]) == 0) {
+							parts[i] = s;
+							ok = true;
+							break;
+						}
+					}
+					if(!ok)
+						write("No such user\n");
 				}
 			}
 			if(!ok) break;
