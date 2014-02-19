@@ -1,7 +1,6 @@
 #ifndef COMBOARD_H
 #define COMBOARD_H
 
-#include "loginmanager.h"
 #include "messageboard.h"
 
 #include "bbs.h"
@@ -75,7 +74,8 @@ private:
 	BBS::Session &session;
 
 	std::unordered_map<std::string, int> settings;
-	LoginManager &users;
+	//LoginManager &users;
+	BBS &bbs;
 	MessageBoard &board;
 	bbs::Console &console;
 	std::vector<Command> commands;
@@ -85,7 +85,7 @@ private:
 	std::map<uint64_t, MessageBoard::Message> topicMap;
 
 	std::unordered_map<std::string, std::string> &variables;
-	std::unordered_map<std::string, std::string> texts;
+	std::unordered_map<std::string, std::string> &texts;
 
 };
 

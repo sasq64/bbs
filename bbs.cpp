@@ -4,6 +4,7 @@ using namespace std;
 using namespace utils;
 
 string BBS::init_dbname;
+//BBS BBS::NO_BBS;
 
 string BBS::Session::format(string templ) {
 	size_t tstart = 0;
@@ -30,6 +31,9 @@ BBS::Session BBS::login(const string &handle, const string &password) {
 	return Session(id);
 }
 
+void BBS::logout(uint64_t id) {
+}
+
 string BBS::get_text(const string &name, const string &what) {
 	File f;
 	if(name == "ansi") {		
@@ -54,9 +58,9 @@ void BBS::set_user_data(uint64_t user, const string &what, const string &data) {
 	db.exec("INSERT OR REPLACE INTO metadata(user,what,data) VALUES (?,?,?)", user, what, data);
 }
 
-
 BBS::BBS(const string &dbname) : db { dbname }, loginmanager { db } {
 
+	db.exec("PRAGMA synchronous = OFF");
 	db.exec("CREATE TABLE IF NOT EXISTS metadata (user INT, what STRING, data STRING, PRIMARY KEY(user, what))");
 
 	if(loginmanager.get_id("admin") == LoginManager::NO_USER) {

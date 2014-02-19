@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
 			console.flush();
 			console.clear();
 			int tries = 2;
-			BBS::Session bbs_session { 0 };
+			BBS::Session bbs_session;
 			while(true) {
 				//break;
 				auto l = console.getLine("LOGON:");

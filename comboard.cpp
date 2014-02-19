@@ -9,7 +9,7 @@ using namespace utils;
 using namespace std;
 using std::chrono::system_clock;
 
-ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console) : session(session), users(BBS::instance().getlm()), board(board), console(console), 
+ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console) : session(session), bbs(BBS::instance()), board(board), console(console), 
 	commands { 			
 		{ "list groups", "List all groups", [&](const vector<string> &args) { 
 			LOGD("List groups");
@@ -17,7 +17,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			for(const auto &g : board.list_groups()) {
 				//time_t tt = (time_t)g.last_post;
 				//const char *t = ctime(&tt);
-				write("~1%s~0 created by ~f%s~0\n", g.name, users.get(g.creator));
+				write("~1%s~0 created by ~f%s~0\n", g.name, bbs.get_user(g.creator));
 			}
 		} },
 
@@ -28,8 +28,8 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 		} },
 
 		{ "finger !u", "Read a users plan", [&](const vector<string> &args) { 
-			auto uid = users.get_id(args[0]);
-			auto plan = BBS::instance().get_user_data(uid, "plan");
+			auto uid = bbs.get_user_id(args[0]);
+			auto plan = bbs.get_user_data(uid, "plan");
 			write(plan);
 		} },
 
@@ -71,14 +71,14 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 		} },
 
 		{ "list users", "list all users", [&](const vector<string> &args) { 
-			auto ulist = users.list_users();
+			auto ulist = bbs.list_users();
 			write("\n");
 			for(auto &u : ulist)
 				write("%s\n", u);
 		} },
 
 		{ "who", "Show who is online", [&](const vector<string> &args) { 
-			auto ulist = users.list_logged_in();
+			auto ulist = bbs.list_logged_in();
 			write("\n");
 			for(auto &u : ulist)
 				write("%s\n", u);
@@ -89,7 +89,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			auto group = board.current_group();
 			write("\nTopics in group ~f%s~0\n", group.name);
 			for(const auto &t : board.list_topics()) {
-				write("%s (~c%d~0)\n", t.name, users.get(t.creator));
+				write("%s (~c%d~0)\n", t.name, bbs.get_user(t.creator));
 			}
 		} },
 
@@ -102,7 +102,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 					auto msg = board.get_message(i);
 					auto topic = board.get_topic(msg.topic);
 					auto group = board.get_group(topic.group);
-					write("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator));
+					write("#%d %s [%s] (%s)\n", i, topic.name, group.name, bbs.get_user(msg.creator));
 				}
 			}
 		} },
@@ -115,7 +115,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 				auto msg = board.get_message(i);
 				auto topic = board.get_topic(msg.topic);
 				auto group = board.get_group(topic.group);
-				write("#%d %s [%s] (%s)\n", i, topic.name, group.name, users.get(msg.creator));
+				write("#%d %s [%s] (%s)\n", i, topic.name, group.name, bbs.get_user(msg.creator));
 			}
 		} },
 
@@ -183,7 +183,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 				write("Usage: create user [handle] [password]\n");
 				return;
 			}
-			auto id = users.add_user(args[0], args[1]);
+			auto id = bbs.create_user(args[0], args[1]);
 			if(id == 0)
 				write("Create user failed\n");
 			else
@@ -234,10 +234,10 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			lastShown.id = 0;	
 		} },
 	},
-	variables { session.vars() },
-	texts { BBS::instance().text() }
+	variables ( session.vars() ),
+	texts ( BBS::instance().text() )
 {
-	variables["you"] = users.get(board.current_user());
+	variables["you"] = bbs.get_user(board.current_user());
 	settings["fulledit"] = 1;
 }
 /*
@@ -304,7 +304,7 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 	variables["msgno"] = to_string(msg.id);
 	variables["topic"] = topic.name;
 	variables["date"] = buffer;
-	variables["poster"] = users.get(msg.creator);
+	variables["poster"] = bbs.get_user(msg.creator);
 	variables["replies"] = s;
 
 	auto header = bbs_format(texts["msg_header"], variables);
@@ -316,10 +316,10 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 	auto footer = bbs_format(texts["msg_footer"], variables);
 	write(footer);
 	write("\n");
-	//write("~0by %s. %s\n", users.get(msg.creator), s);
+	//write("~0by %s. %s\n", bbs.get_user(msg.creator), s);
 
 	//for(const auto &r : replies) {
-	//	write("~9Reply #%d by ~8%s~0\n", r.id, users.get(r.creator));
+	//	write("~9Reply #%d by ~8%s~0\n", r.id, bbs.get_user(r.creator));
 	//}
 
 	//write(currentMsg.text);
@@ -560,10 +560,10 @@ bool ComBoard::exec(const string &line) {
 				}
 			} else if(a.argtype == Command::USER) {
 				try {
-					auto id = users.get_id(parts[i]);
+					bbs.get_user_id(parts[i]);
 				} catch (msgboard_exception &e) {
 					ok = false;
-					for(auto &s : users.list_users()) {
+					for(auto &s : bbs.list_users()) {
 						if(s.compare(0, parts[i].length(), parts[i]) == 0) {
 							parts[i] = s;
 							ok = true;
