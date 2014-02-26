@@ -18,6 +18,7 @@
 //#include <sqlite3/database.h>
 
 #include <time.h>
+#include <cmath>
 
 using namespace bbs;
 using namespace utils;
@@ -81,21 +82,33 @@ void petsciiArt(Console &console) {
 	}
 }
 
-template <class T> struct test {
-	test(T &&a, T &&b, T &&c) : c(c), b(b), a(a) {}
-	T c;
-	T b;
-	T a;
-};
-
 int main(int argc, char **argv) {
-
-	//sqlite3db::Database db { "bbs.db" };
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	//logging::setLevel(logging::INFO);
 	// Turn off logging from the utility classes
 	//logging::useLogSpace("utils", false);
+#ifdef BACKWARD_CPP
+	std::set_terminate([]() {
+		LOGD("In terminate");
+		//if(std::uncaught_exception()) {
+			auto e = std::current_exception();
+			try {
+            	rethrow_exception(e);
+            } catch (sqlite3db::db_exception &de) {
+       			backward::Printer p;
+       			de.print_stack();
+            	rethrow_exception(e);
+            } catch (msgboard_exception &me) {
+       			backward::Printer p;
+       			p.print(me.stack_trace);
+            	rethrow_exception(e);
+            } catch (std::exception &se) {
+            	LOGD(se.what());
+            }
+        //}
+ 	});
+#endif
 
 	BBS::init( "bbs.db" );
 
@@ -150,6 +163,8 @@ int main(int argc, char **argv) {
 			//console.write(L"└────────────────────────────┘\n");
 			comboard.show_text("login");
 			//console.write(L"▒▒▒▒▒▒▒▒▒ NIGHTMODE ▒▒▒▒▒▒▒▒▒\n");
+
+			comboard.show_text("intro");
 
 			//std::tuple<int, std::string> result;
 			//db.exec2(result, "q", a0, a1, "hello");

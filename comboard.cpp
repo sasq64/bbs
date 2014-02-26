@@ -27,7 +27,16 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			BBS::instance().set_user_data(board.current_user(), "plan", plan);
 		} },
 
-		{ "finger !u", "Read a users plan", [&](const vector<string> &args) { 
+		{ "help", "Read help files", "?s", [&](const vector<string> &args) { 
+			write("\n");
+			if(args.size() == 0) {
+				show_text("help");
+			} else {
+				if(!show_text(string("help_") + args[0]))
+					write("No such help topic");
+			}
+		} } ,
+		{ "finger", "Read a users plan", "!u", [&](const vector<string> &args) { 
 			auto uid = bbs.get_user_id(args[0]);
 			auto plan = bbs.get_user_data(uid, "plan");
 			write(plan);
@@ -88,8 +97,8 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			LOGD("List topics");
 			auto group = board.current_group();
 			write("\nTopics in group ~f%s~0\n", group.name);
-			for(const auto &t : board.list_topics()) {
-				write("%s (~c%d~0)\n", t.name, bbs.get_user(t.creator));
+			for(const auto &t : board.list_topics(group.id)) {
+				write("~1%s~0 %d/%d%s\n", t.name, t.unread_count, t.msg_count, t.byme_count > 0 ? "*" : "");
 			}
 		} },
 
@@ -119,10 +128,19 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			}
 		} },
 
+		{ "next group", "Go to next unread topic", [&](const vector<string> &args) {
+			board.flush_bits();
+			auto group = board.next_unread_group();
+			if(group.id == 0) {
+				write("\nNo more unread messages");
+			} else
+				board.enter_group(group.id);
+		} },
+
 		{ "next topic", "Go to next unread topic", [&](const vector<string> &args) {
 
 			board.flush_bits();
-			LOGD("First unread");
+			/*LOGD("First unread");
 			auto msgid = board.get_first_unread_msg();
 			if(msgid < 1) {
 				write("No more topics\n");
@@ -131,15 +149,22 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 			LOGD("unread %d", msgid);
 			auto msg = board.get_message(msgid);
 			auto topic = board.get_topic(msg.topic);
-			auto group = board.get_group(topic.group);
-			write("\nGroup:~f%s~0 Topic:~f%s~0\n", group.name, topic.name);
-			board.enter_group(group.id);
-			select_topic(topic.id);
-			//currentMsgThread = board.get_thread(topic.first_msgid);
-			//auto msg_id = topic.first_msgid;
-			msgid = find_first_unread(topic.first_msg);
-			currentMsg = board.get_message(msgid);
-			lastShown.id = 0;
+			auto group = board.get_group(topic.group);*/
+
+			auto group = board.current_group();
+			auto topic = board.next_unread_topic(group.id);
+			if(topic.id > 0) {
+				write("\nGroup:~f%s~0 Topic:~f%s~0\n", group.name, topic.name);
+				board.enter_group(group.id);
+				select_topic(topic.id);
+				//currentMsgThread = board.get_thread(topic.first_msgid);
+				//auto msg_id = topic.first_msgid;
+				auto msgid = find_first_unread(topic.first_msg);
+				LOGD("First unread in topic %d is %d", topic.id, msgid);
+				currentMsg = board.get_message(msgid);
+				lastShown.id = 0;
+			} else
+				write("\nNo more unread topics in current group");
 		} },
 
 		{ "read next", "Read next unread message in current topic", [&](const vector<string> &args) {
@@ -190,12 +215,48 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 				write("User '%s' created\n", args[0]);
 		}, 1 },
 
-		{ "enter group", "Enter a specific group", "!g", [&](const vector<string> &args) {
+		{ "change password", "Change your password", "?u", [&](const vector<string> &args) {
+			auto user = bbs.get_user(board.current_user());
+			if(args.size() == 1) {
+				user = args[0];
+			}
+			if(bbs.get_user_id(user) == 0) {
+					write("\nNo such user\n");
+					return;
+			}
+			if(board.current_user() != 1) {
+				auto op = console.getPassword("Old password:");
+				if(!bbs.verify_user(user, op)) {
+					write("\nThat's not your password\n");
+					return;
+				}
+			}
+			auto np = console.getPassword("New password:");
+			auto np2 = console.getPassword("New (again):");
+			if(np != np2) {
+				write("\nPasswords doesn't match\n");
+				return;
+			}
+			if(bbs.change_password(user, np)) {
+			}
+		}, },
+
+		{ "go", "Enter a specific group", "!g", [&](const vector<string> &args) {
 			auto g = board.enter_group(args[0]);
 			if(g.id == 0)
 				write("No such group\n");
 			else {
 				write("\nEntered group %s\n", g.name);
+				lastShown.id = 0;
+			}
+		} },
+
+		{ "join group", "Join a specific group", "!g", [&](const vector<string> &args) {
+			auto g = board.join_group(args[0]);
+			if(g.id == 0)
+				write("No such group\n");
+			else {
+				write("Joined group %s\n", g.name);
 				lastShown.id = 0;
 			}
 		} },
@@ -226,7 +287,7 @@ ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console)
 				mid = std::stol(args[0]);
 			if(mid > 0) {
 				auto msg = board.get_message(mid);
-				auto text = fulledit(msg.text, true);
+				auto text = edit();
 				auto rid = board.reply(mid, text);
 				write("\nMessage #%d posted\n", rid);
 			} else
@@ -325,7 +386,7 @@ void ComBoard::show_message(const MessageBoard::Message &msg) {
 	//write(currentMsg.text);
 }
 
-void ComBoard::show_text(const std::string &what) {
+bool ComBoard::show_text(const std::string &what) {
 
 	File f;
 	if(console.name() == "ansi") {		
@@ -336,9 +397,15 @@ void ComBoard::show_text(const std::string &what) {
 	if(!f.exists())
 		f = File("text/" + what + ".txt");
 
+	LOGD("FILE %s", f.getName());
+
+	if(!f.exists())
+		return false;
+
 	auto text = f.read();
 	LOGD("%s", text);
-	console.write(text);
+	write(text);
+	return true;
 }
 
 
@@ -426,7 +493,16 @@ string ComBoard::suggested_command() {
 		if(msgid < 1) {
 			return "status";
 		}
-		return "next topic";
+
+		auto t = board.next_unread_topic(board.current_group().id);
+		if(t.id != 0)
+			return "next topic";
+		auto g = board.next_unread_group();
+		if(g.id != 0)
+			return "next group";
+
+		return "WTF!";
+
 	} else
 		return "read next";
 
@@ -480,6 +556,9 @@ template <class... A> void ComBoard::write(const std::string &text, const A& ...
 }
 
 bool ComBoard::exec(const string &line) {
+
+	board.update_bits();
+
 	auto parts = split(line);
 	if(parts.size() < 1)
 		return true;
@@ -617,7 +696,7 @@ private:
 
 
 #include "catch.hpp"
-
+/*
 TEST_CASE("comboard", "ComBoard test") {
 
 	using namespace utils;
@@ -656,5 +735,5 @@ TEST_CASE("comboard", "ComBoard test") {
 
 
 }
-
+*/
 #endif

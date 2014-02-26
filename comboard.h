@@ -62,7 +62,7 @@ public:
 	bool exec(const std::string &line);
 	std::string suggested_command();
 	template <class... A> void write(const std::string &text, const A& ... args);
-	void show_text(const std::string &what);
+	bool show_text(const std::string &what);
 private:
 
 	uint64_t find_first_unread(uint64_t msg_id);

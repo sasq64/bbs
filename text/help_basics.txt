@@ -1,3 +1,4 @@
 Enter commands at the prompt. You can abbriviate as much as you like.
 Hitting ~1ENTER~0 executes the suggested command shown in the prompt.
-~1help commands~0 shows all commands.
+~1list commands~0 shows all commands.
+You should start with ~1list groups~0, then ~j

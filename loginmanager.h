@@ -21,6 +21,7 @@ public:
 		db.exec("CREATE TABLE IF NOT EXISTS bbsuser (sha TEXT, handle TEXT)");
 	}
 	uint64_t verify_user(const std::string &handle, const std::string &password);
+	bool change_password(const std::string &handle, const std::string &newp, const std::string &oldp = "");
 	uint64_t login_user(const std::string &handle, const std::string &password);
 	void logout_user(uint64_t id);
 	std::vector<std::string> list_users();

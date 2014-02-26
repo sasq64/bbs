@@ -18,6 +18,18 @@ uint64_t LoginManager::verify_user(const std::string &handle, const std::string 
 	return id;
 }
 
+bool LoginManager::change_password(const std::string &handle, const std::string &newp, const std::string &oldp) {
+	//auto oldSHA = utils::sha256(handle + "\t" + oldp);
+	auto newSHA = utils::sha256(handle + "\t" + newp);
+	uint64_t id = NO_USER;
+	auto q = db.query<uint64_t>("SELECT ROWID FROM bbsuser WHERE handle=?", handle);
+	if(q.step()) {
+		db.exec("UPDATE bbsuser SET sha=? WHERE handle=?", newSHA, handle);
+		return true;
+	} else
+		return false;
+}
+
 uint64_t LoginManager::login_user(const std::string &handle, const std::string &password) {
 	auto id = verify_user(handle, password);
 

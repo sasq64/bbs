@@ -8,10 +8,22 @@
 #include <coreutils/bitfield.h>
 #include <coreutils/log.h>
 
+#ifdef BACKWARD_CPP
+#define BACKWARD_HAS_BFD 1
+#include <backward-cpp/backward.hpp>
+#endif
+
 class msgboard_exception : public std::exception {
 public:
-	msgboard_exception(const char *ptr = "Messageboard Exception") : msg(ptr) {}
+	msgboard_exception(const char *ptr = "Messageboard Exception") : msg(ptr) {
+#ifdef BACKWARD_CPP
+		stack_trace.load_here(32);
+#endif		
+	}
 	virtual const char *what() const throw() { return msg; }
+#ifdef BACKWARD_CPP
+	backward::StackTrace stack_trace;
+#endif
 private:
 	const char *msg;
 };
@@ -31,18 +43,22 @@ public:
 
 	struct Topic {
 		Topic(uint64_t id = 0, uint64_t first_msg = 0, uint64_t group = 0, const std::string &n = "", uint64_t s = 0)
-			: id(id), first_msg(first_msg), group(group), name(n), creator(s) {}
+			: id(id), first_msg(first_msg), group(group), name(n), creator(s), msg_count(0), unread_count(0), byme_count(0) {}
 		uint64_t id;
 		uint64_t first_msg;
 		uint64_t group;
 		std::string name;
 		uint64_t creator;
+		// ex data
+		int msg_count;
+		int unread_count;
+		int byme_count;	
 	};
 
 	struct Message {
 		Message(uint64_t id = 0, const std::string &t = "", uint64_t topic = 0, uint64_t creator = 0, uint64_t parent = 0, uint64_t ts = 0, bool r = true)
 			: id(id), text(t), topic(topic), creator(creator), parent(parent), timestamp(ts), read(r) {
-				LOGD("Message created id %d text %s", id, text);
+				LOGD("Message(%d,%s)", id, text);
 			}
 		uint64_t id;
 		std::string text;
@@ -61,9 +77,10 @@ public:
 	Group get_group(const std::string &name);
 
 	void flush_bits();
+	void update_bits();
 
 	uint64_t get_first_unread_msg() {
-		uint64_t mid = msgbits.lowest_unset()+1;
+		uint64_t mid = msgbits.lowest_set()+1;
 		if(mid >= last_msg())
 			return 0;
 		return mid;
@@ -87,13 +104,13 @@ public:
 	}
 
 	bool is_read(int msgid) {
-		return msgbits.get(msgid-1);
+		return !msgbits.get(msgid-1);
 	}
 	void mark_read(int msgid) {
 		if(msgid < 1)
 			throw msgboard_exception("Illegal msgid");
 		LOGD("Msg %d read", msgid);
-		msgbits.set(msgid-1, true);
+		msgbits.set(msgid-1, false);
 	}
 
 	Group current_group() {
@@ -102,11 +119,19 @@ public:
 
 	std::vector<Message> get_replies(uint64_t id);
 
+	void join_group(uint64_t group);
+	Group join_group(const std::string &group);
+
+	Topic next_unread_topic(uint64_t group);
+	Group next_unread_group();
+
+
+
 	uint64_t create_group(const std::string &name);
 	const std::vector<Group> list_groups();
 	Group enter_group(const std::string &group_name);
 	Group enter_group(uint64_t groupid);
-	const std::vector<Topic> list_topics();
+	const std::vector<Topic> list_topics(uint64_t group);
 	const std::vector<Message> list_messages(uint64_t topic_id);
 	uint64_t post(const std::string &topic_name, const std::string &text);
 	uint64_t reply(uint64_t msgid, const std::string &text);
@@ -114,7 +139,10 @@ private:
 	sqlite3db::Database &db;
 	uint64_t currentUser;
 	Group currentGroup;
+
+	// Bits mark if message is UNREAD.
 	BitField msgbits;
+	uint64_t lastEnd;
 };
 
 #endif // MESSAGEBOARD_H

@@ -13,6 +13,10 @@
 #include <mutex>
 #include <memory>
 
+#ifdef USE_T_DEFINE
+#define _T(x) BBS::instance().translate(x)
+#endif
+
 class BBS {
 public:
 
@@ -30,14 +34,6 @@ public:
 	public:
 
 		Session() : id(0) {}
-
-		//Session& operator=(const Session& other) {
-			//bbs = other.bbs;
-			//*this = other;
-			//return *this;
-		//}
-
-
 		Session(uint64_t id) : id(id), logout(std::shared_ptr<Logout>(new Logout(id))) {}
 
 		std::string format(std::string templ);
@@ -65,6 +61,10 @@ public:
 
 	Session login(const std::string &handle, const std::string &password);
 	void logout(uint64_t id);
+	bool verify_user(const std::string &handle, const std::string &password) {
+		return loginmanager.verify_user(handle, password);
+	}
+	bool change_password(const std::string &handle, const std::string &oldp, const std::string &newp = "");
 
 	std::vector<std::string> list_users() {
 		return loginmanager.list_users();

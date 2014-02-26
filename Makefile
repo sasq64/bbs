@@ -3,19 +3,19 @@ MODULE_DIR = ../utils
 include $(MODULE_DIR)/config.mk
 
 OBJDIR := obj/
-CFLAGS := -g -O1 -Wall -I$(MODULE_DIR)
-CXXFLAGS := -std=c++0x
+CFLAGS += -g -O1 -Wall
 
 include $(MODULE_DIR)/coreutils/module.mk
 include $(MODULE_DIR)/bbsutils/module.mk
 include $(MODULE_DIR)/crypto/module.mk
 include $(MODULE_DIR)/sqlite3/module.mk
+include $(MODULE_DIR)/backward-cpp/module.mk
 
 TARGET := bbs
 LOCAL_FILES += bbs.cpp loginmanager.cpp messageboard.cpp comboard.cpp bbstools.cpp
 LOCAL_FILES += main.cpp 
 #LIBS += -lbfd
-#LDFLAGS += -g
+LDFLAGS += -g
 #CFLAGS += -DMY_UNIT_TEST
 #TARGET := test
 #LOCAL_FILES += catch.cpp

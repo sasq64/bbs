@@ -54,6 +54,10 @@ string BBS::get_user_data(uint64_t user, const string &what) {
 	return "";
 }
 
+bool BBS::change_password(const std::string &handle, const std::string &newp, const std::string &oldp) {
+	return loginmanager.change_password(handle, newp, oldp);
+}
+
 void BBS::set_user_data(uint64_t user, const string &what, const string &data) {
 	db.exec("INSERT OR REPLACE INTO metadata(user,what,data) VALUES (?,?,?)", user, what, data);
 }
