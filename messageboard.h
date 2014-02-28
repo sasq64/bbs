@@ -8,22 +8,11 @@
 #include <coreutils/bitfield.h>
 #include <coreutils/log.h>
 
-#ifdef BACKWARD_CPP
-#define BACKWARD_HAS_BFD 1
-#include <backward-cpp/backward.hpp>
-#endif
-
 class msgboard_exception : public std::exception {
 public:
 	msgboard_exception(const char *ptr = "Messageboard Exception") : msg(ptr) {
-#ifdef BACKWARD_CPP
-		stack_trace.load_here(32);
-#endif		
 	}
 	virtual const char *what() const throw() { return msg; }
-#ifdef BACKWARD_CPP
-	backward::StackTrace stack_trace;
-#endif
 private:
 	const char *msg;
 };

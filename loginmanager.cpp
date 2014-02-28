@@ -32,7 +32,6 @@ bool LoginManager::change_password(const std::string &handle, const std::string 
 
 uint64_t LoginManager::login_user(const std::string &handle, const std::string &password) {
 	auto id = verify_user(handle, password);
-
 	lock_guard<mutex> guard(lock);
 	if(id > 0)
 		logged_in.insert(id);

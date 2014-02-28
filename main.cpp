@@ -88,27 +88,6 @@ int main(int argc, char **argv) {
 	//logging::setLevel(logging::INFO);
 	// Turn off logging from the utility classes
 	//logging::useLogSpace("utils", false);
-#ifdef BACKWARD_CPP
-	std::set_terminate([]() {
-		LOGD("In terminate");
-		//if(std::uncaught_exception()) {
-			auto e = std::current_exception();
-			try {
-            	rethrow_exception(e);
-            } catch (sqlite3db::db_exception &de) {
-       			backward::Printer p;
-       			de.print_stack();
-            	rethrow_exception(e);
-            } catch (msgboard_exception &me) {
-       			backward::Printer p;
-       			p.print(me.stack_trace);
-            	rethrow_exception(e);
-            } catch (std::exception &se) {
-            	LOGD(se.what());
-            }
-        //}
- 	});
-#endif
 
 	BBS::init( "bbs.db" );
 
