@@ -82,7 +82,17 @@ void petsciiArt(Console &console) {
 	}
 }
 
+//#include <net/net.h>
+
+void net_test();
+
 int main(int argc, char **argv) {
+
+	//net_test();
+	//net::WebGetter getter { ".cache" };
+	//getter.getFile("http://csdb.dk/release/download.php?id=81345", [](const File &f) {
+	//});
+	//return 0;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	//logging::setLevel(logging::INFO);
@@ -214,7 +224,7 @@ int main(int argc, char **argv) {
 			while(true) {
 				lv.update();
 			} */
-		
+
 		} catch (TelnetServer::disconnect_excpetion &e) {
 			LOGD("Client disconnected");
 			//loginManager.logout_user(userId);

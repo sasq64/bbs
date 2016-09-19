@@ -63,3 +63,40 @@ if cursor < ?
 
     xStart        
     V
+
+
+
+TODO
+
+Goto next
+ exception
+ crash
+ unity log message
+
+
+
+--------- beginning of crash
+F/libc    (13767): Fatal signal 11 (SIGSEGV), code -6, fault addr 0x35c7 in tid 14156 (Thread-717)
+I/DEBUG   (  343): *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+I/DEBUG   (  343): Build fingerprint: 'google/shamu/shamu:5.0.1/LRX22C/1602158:user/release-keys'
+I/DEBUG   (  343): Revision: '33696'
+I/DEBUG   (  343): ABI: 'arm'
+I/DEBUG   (  343): pid: 13767, tid: 14156, name: Thread-717  >>> com.facebook.katana <<<
+I/DEBUG   (  343): signal 11 (SIGSEGV), code -6 (SI_TKILL), fault addr 0x39
+I/DEBUG   (  343): Abort message: 'art/runtime/check_jni.cc:65] JNI DETECTED ERROR IN APPLICATION: thread Thread[32,tid=14156,Native,Thread*=0xa3847000,peer=0x12c07800,"Thread-717"] using JNIEnv* from thread Thread[34,tid=14158,Runnable,Thread*=0xa3847400,peer=0x12c092b0,"Timer-0"]'
+I/DEBUG   (  343):     r0 995e7a60  r1 fffffaa0  r2 35692c7a  r3 00000000
+I/DEBUG   (  343):     r4 00000001  r5 b6f8ddf4  r6 98bff408  r7 b4f2ca69
+I/DEBUG   (  343):     r8 987c9160  r9 00000000  sl b412b488  fp 00000000
+I/DEBUG   (  343):     ip 987c9164  sp 98bff2a0  lr b4f2ca0b  pc b4eed124  cpsr 200e0030
+I/DEBUG   (  343):
+I/DEBUG   (  343): backtrace:
+I/DEBUG   (  343):     #00 pc 001f4124  /system/lib/libart.so (art::Monitor::VisitLocks(art::StackVisitor*, void (*)(art::mirror::Object*, void*), void*, bool)+59)
+I/DEBUG   (  343):     #01 pc 00233a07  /system/lib/libart.so (art::StackDumpVisitor::VisitFrame()+374)
+I/DEBUG   (  343):     #02 pc 0022da3d  /system/lib/libart.so (art::StackVisitor::WalkStack(bool)+272)
+I/DEBUG   (  343):     #03 pc 002361c9  /system/lib/libart.so (art::Thread::Dump(std::__1::basic_ostream<char, std::__1::char_traits<char> >&) const+224)
+I/DEBUG   (  343):     #04 pc 0023f31d  /system/lib/libart.so (art::ThreadList::DumpLocked(std::__1::basic_ostream<char, std::__1::char_traits<char> >&)+120)
+I/DEBUG   (  343):     #05 pc 00225d91  /system/lib/libart.so (art::AbortState::Dump(std::__1::basic_ostream<char, std::__1::char_traits<char> >&)+272)
+I/DEBUG   (  343):     #06 pc 00225fdb  /system/lib/libart.so (art::Runtime::Abort()+82)
+I/DEBUG   (  343):     #07 pc 000a72e9  /system/lib/libart.so (art::LogMessage::~LogMessage()+1360)
+I/DEBUG   (  343):     #08 pc 000b1401  /system/lib/libart.so (art::JniAbort(char const*, char const*)+1112)
+I/DEBUG   (  343):     #09 pc 000b1945  /system/lib/libart.so (art::JniAbortF(char const*, char const*, ...)+68)

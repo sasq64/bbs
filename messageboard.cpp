@@ -5,6 +5,8 @@
 #include <coreutils/file.h>
 
 #include <chrono>
+#include <unordered_map>
+#include <stdint.h>
 
 using namespace std;
 using namespace utils;

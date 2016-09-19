@@ -296,14 +296,14 @@ void shell(Console &console) {
 				currentDir = newDir;
 		} else if(cmd == "cat") {
 			File file { currentDir, parts[1] };
-			string contents((char*)file.getPtr(), file.getSize());
+			auto contents = file.read();
 			console.write(contents);
 			console.write("\n");
 		} else if(cmd == "ed") {
 			auto saved = console.getTiles();
 			auto xy = console.getCursor();
 			File file { currentDir, parts[1] };
-			string contents((char*)file.getPtr(), file.getSize());
+			auto contents = file.read();
 			FullEditor ed(console);
 			ed.setString(contents);
 			while(true) {
@@ -354,14 +354,14 @@ void showPetscii(Console &console, const std::string &name) {
 			t.fg = Console::BLACK;
 		}
 	}
-	console.rawPut(142);
+	//console.rawPut(142);
 	console.setTiles(tiles);
 	console.flush();
 	console.moveCursor(39, 24);
 	console.setColor(Console::BLACK, Console::BLACK);
 	console.getKey();
 	console.clear();
-	console.rawPut(14);
+	//console.rawPut(14);
 }
 
 int main(int argc, char **argv) {

@@ -9,11 +9,19 @@ using namespace utils;
 using namespace std;
 using std::chrono::system_clock;
 
+struct ColorChar {
+	uint16_t code;
+	uint8_t color;
+};
+
+typedef std::basic_string<ColorChar> ColorString;
+
 ComBoard::ComBoard(BBS::Session &session, MessageBoard &board, Console &console) : session(session), bbs(BBS::instance()), board(board), console(console), 
 	commands { 			
 		{ "list groups", "List all groups", [&](const vector<string> &args) { 
 			LOGD("List groups");
 			write("\n");
+
 			for(const auto &g : board.list_groups()) {
 				//time_t tt = (time_t)g.last_post;
 				//const char *t = ctime(&tt);
@@ -537,22 +545,26 @@ static int palette[] = { Console::WHITE, Console::CYAN, Console::GREY, Console::
 
 template <class... A> void ComBoard::write(const std::string &text, const A& ... args) {
 	string f = format(text, args...);
-	auto parts = split(f, "~", true);
-	bool first = true;
-	for(auto s : parts) {
-		if(!first) {
+	auto last = 0U;
+	auto i = 0U;
+	for(; i<f.size(); i++) {
+		if(f[i] == '~')
+		{
+			if(last != i)
+				console.write(f.substr(last, i-last));
+			i++;
 			uint8_t c = 0;
-			if(s[0] <= '9')
-				c = s[0] - '0';
+			if(f[i] <= '9')
+				c = f[i] - '0';
 			else
-				c = s[0] - 'a' + 10;
+				c = f[i] - 'a' + 10;
 			if(c >= 5) c = 0;
 			console.setColor(palette[c]);
-			s = s.substr(1);
+			last = ++i;
 		}
-		first = false;
-		console.write(s);
 	}
+	if(last != i)
+		console.write(f.substr(last, i-last));
 }
 
 bool ComBoard::exec(const string &line) {
