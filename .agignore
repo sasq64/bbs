@@ -1,0 +1,15 @@
+*\.a
+*\.o
+*\.dylib
+*\.log
+*\.dll
+*\.lib
+*\.jar
+*\.bin
+*\.asset
+*\.png
+build/*
+builds/*
+*~
+.*
+compile_commands.json

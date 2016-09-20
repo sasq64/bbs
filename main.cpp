@@ -30,28 +30,6 @@ using namespace std;
 //backward::SignalHandling sh;
 //} // namespace backward
 
-#ifdef UNIT_TEST
-
-#include "catch.hpp"
-
-TEST_CASE("utils::format", "format operations") {
-
-	using namespace utils;
-	using namespace std;
-
-
-	BitField bf(1234);
-	bf.set(5, true);
-	bf.set(7, true);
-	bf.set(1015, true);
-	bf.set(1016, true);
-	bf.set(1017, true);
-	LOGD("%d %d %d %d %d %d", (int)bf.get(5), (int)bf.get(6), (int)bf.get(7), (int)bf.get(1015), (int)bf.get(1016), (int)bf.get(1018));
-	//REQUIRE(res == "14 014 test 20 case");
-}
-
-#endif
-
 void petsciiArt(Console &console) {
 	while(true) {
 		static vector<string> pics = { "pilt.c64", "ninja.c64", "floppy.c64", "gary.c64", "victor.c64", "robot.c64",
@@ -82,17 +60,7 @@ void petsciiArt(Console &console) {
 	}
 }
 
-//#include <net/net.h>
-
-void net_test();
-
 int main(int argc, char **argv) {
-
-	//net_test();
-	//net::WebGetter getter { ".cache" };
-	//getter.getFile("http://csdb.dk/release/download.php?id=81345", [](const File &f) {
-	//});
-	//return 0;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	//logging::setLevel(logging::INFO);
@@ -140,23 +108,14 @@ int main(int argc, char **argv) {
 					tries--;
 			}
 
-
 			MessageBoard board(BBS::instance().getdb(), userId);
 			ComBoard comboard(bbs_session, board, console);
 
 			console.clear();
 			console.moveCursor(0,0);
-
-			//console.write(L"┌────────────────────────────┐\n");
-			//console.write(L"│▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│\n");
-			//console.write(L"└────────────────────────────┘\n");
 			comboard.show_text("login");
-			//console.write(L"▒▒▒▒▒▒▒▒▒ NIGHTMODE ▒▒▒▒▒▒▒▒▒\n");
-
 			comboard.show_text("intro");
 
-			//std::tuple<int, std::string> result;
-			//db.exec2(result, "q", a0, a1, "hello");
 			vector<string> history;
 			auto history_pos = history.begin();
 
@@ -208,22 +167,6 @@ int main(int argc, char **argv) {
 					session.disconnect();
 				}
 			}
-
-			/*
-			console.write("Welcome...");
-			Area a (0,0,10,10);
-			vector<string> s = { "First item", "Second item", "Last item" };
-			ListView<string>::RenderFunction rf = ListView<string>::simpleRenderFunction;// ListView<string>::simpleRenderFunction();
-			//[&](Console &c, Area &a, int item, const string &data) {
-			//	c.put(a.x0, a.y0, data);
-			//	a.y0++;
-			//};
-			ListView<string>::SourceFunction sf = ListView<string>::makeVectorSource(s);
-
-			ListView<string> lv {console, {1,1,10,10}, rf, sf, 3};
-			while(true) {
-				lv.update();
-			} */
 
 		} catch (TelnetServer::disconnect_excpetion &e) {
 			LOGD("Client disconnected");
